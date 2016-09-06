@@ -146,7 +146,11 @@
         </property>
         <layout class="QVBoxLayout">
          <item>
-          <widget class="QListView" name="lv_rules"/>
+          <widget class="QListView" name="lv_rules">
+           <property name="selectionMode">
+            <enum>QAbstractItemView::ExtendedSelection</enum>
+           </property>
+          </widget>
          </item>
          <item>
           <layout class="QHBoxLayout">

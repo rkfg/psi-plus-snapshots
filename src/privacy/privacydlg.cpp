@@ -108,8 +108,10 @@ void PrivacyDlg::editCurrentRule()
 
 void PrivacyDlg::removeCurrentRule()
 {
-	if (ui_.lv_rules->currentIndex().isValid()) {
-		model_.removeRow(ui_.lv_rules->currentIndex().row(),ui_.lv_rules->currentIndex().parent());
+	QModelIndexList selected = ui_.lv_rules->selectionModel()->selectedIndexes();
+	for (QModelIndexList::iterator i = selected.end() - 1;
+		 i != selected.begin() - 1; i--) {
+		model_.removeRow((*i).row(), (*i).parent());
 	}
 }
 
