@@ -110,6 +110,7 @@ private slots:
 
 private:
 	void contextMenuRequested(const QPoint& p);
+
 	GCMainDlg* gcDlg_;
 };
 

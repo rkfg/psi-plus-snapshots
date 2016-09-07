@@ -900,6 +900,7 @@ GCMainDlg::GCMainDlg(PsiAccount *pa, const Jid &j, TabManager *tabManager)
 	connect(ui_.log->textWidget(), SIGNAL(quote(const QString &)), ui_.mle->chatEdit(), SLOT(insertAsQuote(const QString &)));
 	connect(privacyManager(), SIGNAL(listChanged(const QStringList&)), ui_.lv_users, SLOT(updateNicks()));
 	connect(pa->avatarFactory(), SIGNAL(avatarChanged(Jid)), SLOT(avatarUpdated(Jid)));
+
 #ifdef PSI_PLUGINS
 	PluginManager::instance()->setupGCTab(this, account(), jid().full());
 #endif
@@ -1819,6 +1820,7 @@ void GCMainDlg::message(const Message &_m, const PsiEvent::Ptr &e)
 
 	if(m.body().isEmpty())
 		return;
+
 	// code to determine if the speaker was addressing this client in chat
 	if(m.body().contains(d->self))
 		d->alert = true;

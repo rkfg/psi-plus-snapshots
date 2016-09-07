@@ -24,6 +24,7 @@
 #include <QWidget>
 #include <QDialog>
 
+
 #include "advwidget.h"
 #include "tabbablewidget.h"
 
@@ -173,6 +174,7 @@ private:
 
 	void setMargins();
 	PsiPrivacyManager* privacyManager();
+
 };
 
 class GCFindDlg : public QDialog
