@@ -25,6 +25,7 @@
 #include <QTreeWidget>
 
 #include "xmpp_status.h"
+#include "privacy/psiprivacymanager.h"
 
 using namespace XMPP;
 
@@ -75,6 +76,7 @@ public:
 
 	void setMainDlg(GCMainDlg* mainDlg);
 	GCMainDlg* mainDlg() const { return gcDlg_; };
+	PsiPrivacyManager* privacyManager() const;
 	virtual QMimeData* mimeData(const QList<QTreeWidgetItem*>items) const;
 	void clear();
 	void updateAll();
@@ -86,6 +88,9 @@ public:
 	QStringList nickList() const;
 	void doContextMenu(QTreeWidgetItem* it);
 	void setLooks();
+
+public slots:
+	void updateNicks();
 
 protected:
 	enum Role { Moderator = 0, Participant = 1, Visitor = 2 };
@@ -105,7 +110,6 @@ private slots:
 
 private:
 	void contextMenuRequested(const QPoint& p);
-
 	GCMainDlg* gcDlg_;
 };
 

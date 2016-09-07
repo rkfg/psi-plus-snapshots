@@ -24,7 +24,6 @@
 #include <QWidget>
 #include <QDialog>
 
-
 #include "advwidget.h"
 #include "tabbablewidget.h"
 
@@ -173,7 +172,7 @@ private:
 	inline XMPP::Jid jidForNick(const QString &nick) const;
 
 	void setMargins();
-
+	PsiPrivacyManager* privacyManager();
 };
 
 class GCFindDlg : public QDialog

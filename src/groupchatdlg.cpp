@@ -101,6 +101,7 @@
 
 #include "popupmanager.h"
 #include "psievent.h"
+#include "privacy/psiprivacymanager.h"
 
 #define MCMDMUC		"http://psi-im.org/ids/mcmd#mucmain"
 #define MCMDMUCNICK	"http://psi-im.org/ids/mcmd#mucnick"
@@ -897,8 +898,8 @@ GCMainDlg::GCMainDlg(PsiAccount *pa, const Jid &j, TabManager *tabManager)
 	setConnecting();
 
 	connect(ui_.log->textWidget(), SIGNAL(quote(const QString &)), ui_.mle->chatEdit(), SLOT(insertAsQuote(const QString &)));
+	connect(privacyManager(), SIGNAL(listChanged(const QStringList&)), ui_.lv_users, SLOT(updateNick()));
 	connect(pa->avatarFactory(), SIGNAL(avatarChanged(Jid)), SLOT(avatarUpdated(Jid)));
-
 #ifdef PSI_PLUGINS
 	PluginManager::instance()->setupGCTab(this, account(), jid().full());
 #endif
@@ -2086,6 +2087,11 @@ void GCMainDlg::optionsUpdate()
 	ui_.lv_users->updateAll();
 }
 
+PsiPrivacyManager* GCMainDlg::privacyManager()
+{
+	return dynamic_cast<PsiPrivacyManager*>(account()->privacyManager());
+}
+
 void GCMainDlg::lv_action(const QString &nick, const Status &s, int x)
 {
 	if(x == 0) {
@@ -2166,8 +2172,11 @@ void GCMainDlg::lv_action(const QString &nick, const Status &s, int x)
 				d->mucManager->setAffiliation(contact->s.mucItem().jid(), MUCItem::Owner, reason);
 			break;
 		}
-	}
-	else if(x >= 100 && x<300) {
+	} else if (x == 19) {
+		PsiPrivacyManager* privManager = privacyManager();
+		const Jid& jid = s.mucItem().jid();
+		privManager->setContactBlocked(jid, !privManager->isContactBlocked(jid));
+	} else if(x >= 100 && x<300) {
 		// Kick || Ban with reason
 		QString reason;
 		QStringList reasons = PsiOptions::instance()->getOption("options.muc.reasons").toStringList();

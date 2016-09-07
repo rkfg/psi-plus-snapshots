@@ -189,7 +189,13 @@ public:
 			rect.setLeft(rect.left() + 2);
 
 		mp->setPen(QPen((o.state & QStyle::State_Selected) ? palette.color(QPalette::HighlightedText) : palette.color(QPalette::Text)));
-		mp->setFont(o.font);
+		QFont font = o.font;
+		GCUserView* view = dynamic_cast<GCUserView*>(parent());
+		if (view) {
+			PsiPrivacyManager* privManager = view->privacyManager();
+			font.setStrikeOut(privManager && privManager->isContactBlocked(item->s.mucItem().jid()));
+		}
+		mp->setFont(font);
 		mp->setClipRect(rect);
 		QTextOption to;
 		to.setWrapMode(QTextOption::NoWrap);
@@ -388,6 +394,11 @@ GCUserView::~GCUserView()
 void GCUserView::setMainDlg(GCMainDlg* mainDlg)
 {
 	gcDlg_ = mainDlg;
+}
+
+PsiPrivacyManager* GCUserView::privacyManager() const
+{
+	return dynamic_cast<PsiPrivacyManager*>(gcDlg_->account()->privacyManager());
 }
 
 QMimeData* GCUserView::mimeData(QList<QTreeWidgetItem *>items) const
@@ -736,6 +747,9 @@ void GCUserView::doContextMenu(QTreeWidgetItem *i)
 	//pm->insertSeparator();
 	//pm->insertItem(tr("Check &Status"), 2);
 
+	act = new QAction(privacyManager()->isContactBlocked(lvi->s.mucItem().jid()) ? tr("Unblock") : tr("Block"), pm);
+	act->setData(19);
+	pm->addAction(act);
 	act = new QAction(IconsetFactory::icon("psi/vCard").icon(), tr("User &Info"), pm);
 	pm->addAction(act);
 	act->setData(3);
@@ -756,6 +770,11 @@ void GCUserView::doContextMenu(QTreeWidgetItem *i)
 	if(x == -1 || !enabled || lvi.isNull())
 		return;
 	action(lvi->text(0), lvi->s, x);
+}
+
+void GCUserView::updateNicks()
+{
+	emit dataChanged(indexFromItem(topLevelItem(0)), indexFromItem(topLevelItem(topLevelItemCount() - 1)));
 }
 
 void GCUserView::contextMenuRequested(const QPoint &p)
