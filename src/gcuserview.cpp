@@ -749,6 +749,7 @@ void GCUserView::doContextMenu(QTreeWidgetItem *i)
 
 	act = new QAction(privacyManager()->isContactBlocked(lvi->s.mucItem().jid()) ? tr("Unblock") : tr("Block"), pm);
 	act->setData(19);
+	act->setEnabled(!self);
 	pm->addAction(act);
 	act = new QAction(IconsetFactory::icon("psi/vCard").icon(), tr("User &Info"), pm);
 	pm->addAction(act);

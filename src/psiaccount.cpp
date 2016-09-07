@@ -5102,6 +5102,12 @@ void PsiAccount::handleEvent(const PsiEvent::Ptr &e, ActivationType activationTy
 	if(e->type() == PsiEvent::Message) {
 		MessageEvent::Ptr me = e.staticCast<MessageEvent>();
 		const Message &m = me->message();
+		PsiPrivacyManager* privManager = dynamic_cast<PsiPrivacyManager*>(privacyManager());
+		Status status = gcContactStatus(m.from());
+		if (privManager && privManager->isContactBlocked(status.mucItem().jid()))
+		{
+			return;
+		}
 
 #ifdef PSI_PLUGINS
 		//TODO(mck): clean up
