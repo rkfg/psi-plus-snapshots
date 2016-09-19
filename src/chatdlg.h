@@ -28,6 +28,7 @@
 #include <QResizeEvent>
 #include <QDropEvent>
 #include <QCloseEvent>
+#include <QTextEdit>
 
 #include "advwidget.h"
 
@@ -95,6 +96,7 @@ signals:
 	void messagesRead(const Jid &);
 	void aSend(const Message &);
 	void aFile(const Jid &);
+	void messageAppended(const QString &, QTextEdit*);
 
 	/**
 	 * Signals if user (re)started/stopped composing

@@ -89,7 +89,9 @@ public:
 	}
 	virtual QString pluginInfo();
 	virtual QPixmap icon() const;
-	virtual void setupChatTab(QWidget*, int, const QString&) {
+	virtual void setupChatTab(QWidget* widget, int, const QString&) {
+		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)),
+				this, SLOT(messageAppended(const QString &, QTextEdit*)));
 	}
 	virtual void setupGCTab(QWidget* widget, int, const QString&) {
 		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)),

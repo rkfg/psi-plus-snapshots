@@ -961,6 +961,7 @@ void ChatDlg::appendMessage(const Message &m, bool local)
 		keepOpen_ = true;
 		QTimer::singleShot(1000, this, SLOT(setKeepOpenFalse()));
 	}
+	emit messageAppended(body, chatView());
 }
 
 void ChatDlg::updateIsComposing(bool b)
