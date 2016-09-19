@@ -16,6 +16,7 @@ SUBDIRS += attentionplugin \
     historykeeperplugin \
     icqdieplugin \
     imageplugin \
+    imagepreviewplugin \
     jabberdiskplugin \
     messagefilterplugin \
     otrplugin \
