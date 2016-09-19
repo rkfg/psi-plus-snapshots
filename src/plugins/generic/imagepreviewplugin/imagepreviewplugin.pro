@@ -1,5 +1,5 @@
 #CONFIG += release
-CONFIG   += c++11
+QMAKE_CXXFLAGS += -std=c++11
 
 isEmpty(PSISDK) {
     include(../../psiplugin.pri)
