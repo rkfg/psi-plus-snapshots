@@ -1,4 +1,5 @@
 #CONFIG += release
+CONFIG   += c++11
 
 isEmpty(PSISDK) {
     include(../../psiplugin.pri)
