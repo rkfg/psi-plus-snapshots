@@ -50,8 +50,12 @@
 #include <QtNetwork/QNetworkRequest>
 #include <QImageReader>
 #include <QTextDocumentFragment>
+#include <QSpinBox>
+#include <QComboBox>
 
 #define constVersion "0.1.0"
+#define sizeLimitName "imgpreview-size-limit"
+#define previewSizeName "imgpreview-preview-size"
 
 class ImagePreviewPlugin: public QObject,
 		public PsiPlugin,
@@ -76,10 +80,8 @@ public:
 	virtual bool enable();
 	virtual bool disable();
 
-	virtual void applyOptions() {
-	}
-	virtual void restoreOptions() {
-	}
+	virtual void applyOptions();
+	virtual void restoreOptions();
 	virtual void setIconFactoryAccessingHost(IconFactoryAccessingHost* host);
 	virtual void setActiveTabAccessingHost(ActiveTabAccessingHost* host);
 	virtual void setAccountInfoAccessingHost(AccountInfoAccessingHost* host);
@@ -117,6 +119,10 @@ private:
 	QNetworkAccessManager* manager;
 	QSet<QString> pending;
 	QSet<QString> failed;
+	quint16 previewSize = 0;
+	QPointer<QSpinBox> sb_previewSize;
+	qlonglong sizeLimit = 0;
+	QPointer<QComboBox> cb_sizeLimit;
 };
 
 #ifndef HAVE_QT5
@@ -124,9 +130,8 @@ Q_EXPORT_PLUGIN(ImagePreviewPlugin)
 #endif
 
 ImagePreviewPlugin::ImagePreviewPlugin() :
-		iconHost(0), activeTab(0), accInfo(0), psiController(
-				0), psiOptions(0), enabled(false), manager(
-				new QNetworkAccessManager(this)) {
+		iconHost(0), activeTab(0), accInfo(0), psiController(0), psiOptions(0), enabled(
+				false), manager(new QNetworkAccessManager(this)) {
 	connect(manager, SIGNAL(finished(QNetworkReply *)), this,
 			SLOT(imageReply(QNetworkReply *)));
 }
@@ -152,6 +157,8 @@ bool ImagePreviewPlugin::enable() {
 	} else {
 		enabled = false;
 	}
+	sizeLimit = psiOptions->getPluginOption(sizeLimitName, 1024 * 1024).toULongLong();
+	previewSize = psiOptions->getPluginOption(previewSizeName, 150).toUInt();
 	return enabled;
 }
 
@@ -166,6 +173,19 @@ QWidget* ImagePreviewPlugin::options() {
 	}
 	QWidget *optionsWid = new QWidget();
 	QVBoxLayout *vbox = new QVBoxLayout(optionsWid);
+	cb_sizeLimit = new QComboBox(optionsWid);
+	cb_sizeLimit->addItem(tr("512 Kb"), 512 * 1024);
+	cb_sizeLimit->addItem(tr("1 Mb"), 1024 * 1024);
+	cb_sizeLimit->addItem(tr("2 Mb"), 2 * 1024 * 1024);
+	cb_sizeLimit->addItem(tr("5 Mb"), 5 * 1024 * 1024);
+	cb_sizeLimit->addItem(tr("10 Mb"), 10 * 1024 * 1024);
+	vbox->addWidget(new QLabel(tr("Maximum image size")));
+	vbox->addWidget(cb_sizeLimit);
+	sb_previewSize = new QSpinBox(optionsWid);
+	sb_previewSize->setMinimum(1);
+	sb_previewSize->setMaximum(65535);
+	vbox->addWidget(new QLabel(tr("Image preview size in pixels")));
+	vbox->addWidget(sb_previewSize);
 	QLabel *wikiLink =
 			new QLabel(
 					tr(
@@ -203,7 +223,7 @@ void ImagePreviewPlugin::setActiveTabAccessingHost(
 
 QString ImagePreviewPlugin::pluginInfo() {
 	return tr("Author: ") + "rkfg\n\n"
-			+ trUtf8("This plugin shows the preview image for image URL.\n");
+			+ trUtf8("This plugin shows the preview image for an image URL.\n");
 }
 
 QPixmap ImagePreviewPlugin::icon() const {
@@ -250,7 +270,7 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 		qDebug() << "URL:" << url << "RESULT:" << reply->error() << "SIZE:"
 				<< size << "Content-type:" << contentType;
 		if (ok && allowedTypes.contains(contentType, Qt::CaseInsensitive)
-				&& size < 1024 * 1024) {
+				&& size < sizeLimit) {
 			manager->get(reply->request());
 		} else {
 			pending.remove(urlStr);
@@ -260,7 +280,7 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	case QNetworkAccessManager::GetOperation:
 		try {
 			QImageReader imageReader(reply);
-			auto image = imageReader.read().scaled(150, 150,
+			auto image = imageReader.read().scaled(previewSize, previewSize,
 					Qt::KeepAspectRatio, Qt::SmoothTransformation);
 			if (imageReader.error() != QImageReader::UnknownError) {
 				qWarning() << "ERROR:" << imageReader.errorString();
@@ -288,6 +308,16 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 		break;
 	}
 	reply->deleteLater();
+}
+
+void ImagePreviewPlugin::applyOptions() {
+	previewSize = sb_previewSize->value();
+	sizeLimit = cb_sizeLimit->itemData(cb_sizeLimit->currentIndex()).toULongLong();
+}
+
+void ImagePreviewPlugin::restoreOptions() {
+	sb_previewSize->setValue(previewSize);
+	cb_sizeLimit->setCurrentIndex(cb_sizeLimit->findData(sizeLimit));
 }
 
 #include "imagepreviewplugin.moc"
