@@ -130,6 +130,8 @@ private:
 	bool enabled;
 	QHash<QString, int> accounts_;
 	QNetworkAccessManager* manager;
+	QSet<QString> pending;
+	QSet<QString> failed;
 };
 
 #ifndef HAVE_QT5
@@ -340,6 +342,9 @@ bool ImagePreviewPlugin::appendingChatMessage(int account,
 
 void ImagePreviewPlugin::messageAppended(const QString & message,
 		QTextEdit* te_log) {
+	if (!enabled) {
+		return;
+	}
 	qDebug() << "RECEIVED:" << message;
 	auto cur = te_log->textCursor();
 	te_log->moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
@@ -348,10 +353,16 @@ void ImagePreviewPlugin::messageAppended(const QString & message,
 		auto url = QString(te_log->textCursor().selectedText()).replace(
 				QRegExp("(https?://\\S*)\\s?.*$"), "\\1");
 		qDebug() << "URL FOUND:" << url;
-		QNetworkRequest req;
-		req.setUrl(QUrl(url));
-		req.setOriginatingObject(te_log);
-		manager->head(req);
+		if (failed.contains(url)) {
+			break;
+		}
+		if (!pending.contains(url)) {
+			pending.insert(url);
+			QNetworkRequest req;
+			req.setUrl(QUrl(url));
+			req.setOriginatingObject(te_log);
+			manager->head(req);
+		}
 	}
 	te_log->setTextCursor(cur);
 }
@@ -363,18 +374,22 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	QStringList allowedTypes = { "image/jpeg", "image/png", "image/gif" };
 	QTextEdit* te_log = qobject_cast<QTextEdit*>(
 			reply->request().originatingObject());
+	QUrl url = reply->request().url();
+	QString urlStr = url.toEncoded();
 	switch (reply->operation()) {
 	case QNetworkAccessManager::HeadOperation:
 		size = reply->header(QNetworkRequest::ContentLengthHeader).toULongLong(
 				&ok);
 		contentType =
 				reply->header(QNetworkRequest::ContentTypeHeader).toString();
-		qDebug() << "URL:" << reply->request().url() << "RESULT:"
-				<< reply->error() << "SIZE:" << size << "Content-type:"
-				<< contentType;
+		qDebug() << "URL:" << url << "RESULT:" << reply->error() << "SIZE:"
+				<< size << "Content-type:" << contentType;
 		if (ok && allowedTypes.contains(contentType, Qt::CaseInsensitive)
 				&& size < 1024 * 1024) {
 			manager->get(reply->request());
+		} else {
+			pending.remove(urlStr);
+			failed.insert(urlStr);
 		}
 		break;
 	case QNetworkAccessManager::GetOperation:
@@ -391,7 +406,7 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 					image);
 			auto saved = te_log->textCursor();
 			te_log->moveCursor(QTextCursor::End);
-			if (te_log->find(url.toString(), QTextDocument::FindBackward)) {
+			while (te_log->find(urlStr, QTextDocument::FindBackward)) {
 				auto cur = te_log->textCursor();
 				auto sel = cur.selection().toHtml().replace(
 						QRegExp("(<a href=\"[^\"]*\">)(.*)(</a>)"),
@@ -402,6 +417,7 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 		} catch (std::exception& e) {
 			qWarning() << "ERROR: " << e.what();
 		}
+		pending.remove(urlStr);
 		break;
 	default:
 		break;
