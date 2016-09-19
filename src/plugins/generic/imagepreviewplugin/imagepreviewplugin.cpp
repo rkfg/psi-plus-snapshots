@@ -216,7 +216,7 @@ void ImagePreviewPlugin::messageAppended(const QString &, QTextEdit* te_log) {
 	}
 	auto cur = te_log->textCursor();
 	te_log->moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
-	te_log->moveCursor(QTextCursor::StartOfLine, QTextCursor::MoveAnchor);
+	te_log->moveCursor(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor);
 	QTextCursor found = te_log->textCursor();
 	while (!(found = te_log->document()->find(QRegExp("https?://\\S*"), found)).isNull()) {
 		auto url = found.selectedText();
