@@ -1933,12 +1933,14 @@ void GCMainDlg::appendMessage(const Message &m, bool alert)
 	}
 	if (!PsiOptions::instance()->getOption("options.ui.muc.use-highlighting").toBool())
 		alert=false;
+	mv.setMessageId(m.id());
 	mv.setAlert(alert);
 	mv.setUserId(m.from().full());
 	mv.setNick(m.from().resource());
 	mv.setLocal(mv.nick() == d->self);
 	mv.setSpooled(m.spooled());
 	mv.setDateTime(m.timeStamp());
+	mv.setReplaceId(m.replaceId());
 
 	if (d->trackBar && !mv.isLocal() && !mv.isSpooled()) {
 		d->doTrackBar();

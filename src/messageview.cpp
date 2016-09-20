@@ -125,7 +125,8 @@ QString MessageView::formattedText() const
 	if (PsiOptions::instance()->getOption("options.ui.chat.legacy-formatting").toBool())
 		txt = TextUtil::legacyFormat(txt);
 
-	return txt;
+	return "<span id='msgid_" + messageId() + "_" + userId() + "'>" + txt
+			+ "</span>";
 }
 
 QString MessageView::formattedUserText() const
