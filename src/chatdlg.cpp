@@ -732,7 +732,11 @@ void ChatDlg::doSend()
 
 	QString id = account()->client()->genUniqueId();
 	m.setId(id); // we need id early for message manipulations in chatview
-
+	if (chatEdit()->isCorrection()) {
+		m.setReplaceId(chatEdit()->lastMessageId());
+	}
+	chatEdit()->setLastMessageId(id);
+	chatEdit()->resetCorrection();
 	//xep-0184 Message Receipts
 	if (PsiOptions::instance()->getOption("options.ui.notifications.request-receipts").toBool()) {
 		QStringList sl;

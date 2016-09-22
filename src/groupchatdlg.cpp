@@ -1203,6 +1203,13 @@ void GCMainDlg::mle_returnPressed()
 	Message m(jid());
 	m.setType("groupchat");
 	m.setBody(str);
+	QString id = account()->client()->genUniqueId();
+	m.setId(id); // we need id early for message manipulations in chatview
+	if (ui_.mle->chatEdit()->isCorrection()) {
+		m.setReplaceId(ui_.mle->chatEdit()->lastMessageId());
+	}
+	ui_.mle->chatEdit()->setLastMessageId(id);
+	ui_.mle->chatEdit()->resetCorrection();
 
 	HTMLElement html = d->mle()->toHTMLElement();
 	if(!html.body().isNull())
