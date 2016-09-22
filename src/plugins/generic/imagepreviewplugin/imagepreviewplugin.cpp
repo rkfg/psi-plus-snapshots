@@ -119,9 +119,9 @@ private:
 	QNetworkAccessManager* manager;
 	QSet<QString> pending;
 	QSet<QString> failed;
-	quint16 previewSize = 0;
+	int previewSize = 0;
 	QPointer<QSpinBox> sb_previewSize;
-	qlonglong sizeLimit = 0;
+	int sizeLimit = 0;
 	QPointer<QComboBox> cb_sizeLimit;
 };
 
@@ -157,8 +157,8 @@ bool ImagePreviewPlugin::enable() {
 	} else {
 		enabled = false;
 	}
-	sizeLimit = psiOptions->getPluginOption(sizeLimitName, 1024 * 1024).toULongLong();
-	previewSize = psiOptions->getPluginOption(previewSizeName, 150).toUInt();
+	sizeLimit = psiOptions->getPluginOption(sizeLimitName, 1024 * 1024).toInt();
+	previewSize = psiOptions->getPluginOption(previewSizeName, 150).toInt();
 	return enabled;
 }
 
@@ -254,7 +254,7 @@ void ImagePreviewPlugin::messageAppended(const QString &, QTextEdit* te_log) {
 
 void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	bool ok;
-	qlonglong size = 0;
+	int size = 0;
 	QString contentType;
 	QStringList allowedTypes = { "image/jpeg", "image/png", "image/gif" };
 	QTextEdit* te_log = qobject_cast<QTextEdit*>(
@@ -263,8 +263,7 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	QString urlStr = url.toEncoded();
 	switch (reply->operation()) {
 	case QNetworkAccessManager::HeadOperation:
-		size = reply->header(QNetworkRequest::ContentLengthHeader).toULongLong(
-				&ok);
+		size = reply->header(QNetworkRequest::ContentLengthHeader).toInt(&ok);
 		contentType =
 				reply->header(QNetworkRequest::ContentTypeHeader).toString();
 		qDebug() << "URL:" << url << "RESULT:" << reply->error() << "SIZE:"
@@ -295,7 +294,7 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 				auto cur = te_log->textCursor();
 				auto sel = cur.selection().toHtml().replace(
 						QRegExp("(<a href=\"[^\"]*\">)(.*)(</a>)"),
-						QString("\\1<img src='%1'/>\\3").arg(url.toString()));
+						QString("\\1<img src='%1'/>\\3").arg(urlStr));
 				cur.insertHtml(sel);
 			}
 			te_log->setTextCursor(saved);
@@ -311,8 +310,11 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 }
 
 void ImagePreviewPlugin::applyOptions() {
-	previewSize = sb_previewSize->value();
-	sizeLimit = cb_sizeLimit->itemData(cb_sizeLimit->currentIndex()).toULongLong();
+	psiOptions->setPluginOption(previewSizeName,
+			previewSize = sb_previewSize->value());
+	psiOptions->setPluginOption(sizeLimitName,
+			sizeLimit =
+					cb_sizeLimit->itemData(cb_sizeLimit->currentIndex()).toInt());
 }
 
 void ImagePreviewPlugin::restoreOptions() {
