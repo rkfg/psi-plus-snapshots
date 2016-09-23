@@ -315,8 +315,8 @@ void ChatView::dispatchMessage(const MessageView &mv)
 			if (!replaceId.isEmpty()) {
 				QTextCursor saved = textCursor();
 				QRegExp msgRE(
-						"<a name=\"msgid_" + replaceId + "_"
-								+ mv.userId() + "\"></a>(.*)</p>");
+						"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*</span> )(.*)<a name=\"msgid_" + replaceId + "_"
+								+ mv.userId() + "\"></a>.*</p>");
 				QRegExp underlineFixRE(
 						"(<a href=\"addnick://psi/[^\"]*\"><span style=\")");
 				moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
@@ -332,14 +332,15 @@ void ChatView::dispatchMessage(const MessageView &mv)
 					}
 					QString srcHtml = textCursor().selection().toHtml();
 					if (msgRE.indexIn(srcHtml) >= 0) {
-						QString oldText = msgRE.cap(1);
+						QString oldText = msgRE.cap(2);
 						oldText.replace(QRegExp("<[^>]*>"), "");
-						srcHtml.replace(msgRE,
+						srcHtml.replace(msgRE, "\\1" +
 								mv.formattedText()
 										+ "<img src=\"icon:log_icon_corrected\" title=\""
 										+ oldText + "\" /></p>");
 						srcHtml.replace(underlineFixRE, "\\1text-decoration: none;");
-						textCursor().insertHtml(srcHtml);
+						QTextCursor cur = textCursor();
+						PsiRichText::appendText(document(), cur, srcHtml, false);
 						textCursor().setBlockFormat(savedFormat);
 						break;
 					}
