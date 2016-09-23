@@ -292,10 +292,11 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 			te_log->moveCursor(QTextCursor::End);
 			while (te_log->find(urlStr, QTextDocument::FindBackward)) {
 				auto cur = te_log->textCursor();
-				auto sel = cur.selection().toHtml().replace(
+				QString html = cur.selection().toHtml();
+				html.replace(
 						QRegExp("(<a href=\"[^\"]*\">)(.*)(</a>)"),
 						QString("\\1<img src='%1'/>\\3").arg(urlStr));
-				cur.insertHtml(sel);
+				cur.insertHtml(html);
 			}
 			te_log->setTextCursor(saved);
 		} catch (std::exception& e) {
