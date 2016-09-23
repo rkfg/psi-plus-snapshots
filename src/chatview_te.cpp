@@ -316,12 +316,15 @@ void ChatView::dispatchMessage(const MessageView &mv)
 			if (!replaceId.isEmpty()) {
 				QTextCursor saved = textCursor();
 				QRegExp msgRE;
+				int capIndex;
 				if (PsiOptions::instance()->getOption("options.ui.chat.use-chat-says-style").toBool()) {
 					msgRE.setPattern("(<br />)(.*)<a name=\"msgid_" + replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+					capIndex = 2;
 				} else {
 					msgRE.setPattern(
-							"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*</span> )(.*)<a name=\"msgid_"
+							"((<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*)?</span> )(.*)<a name=\"msgid_"
 									+ replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+					capIndex = 3;
 				}
 				moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
 				while (!textCursor().atStart()) {
@@ -336,7 +339,7 @@ void ChatView::dispatchMessage(const MessageView &mv)
 					}
 					QString srcHtml = textCursor().selection().toHtml();
 					if (msgRE.indexIn(srcHtml) >= 0) {
-						QString oldText = msgRE.cap(2);
+						QString oldText = msgRE.cap(capIndex);
 						oldText.replace(removeTagsRE, "");
 						srcHtml.replace(msgRE, "\\1" +
 								mv.formattedText()
