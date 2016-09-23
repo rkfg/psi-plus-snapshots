@@ -40,7 +40,8 @@
 #include <QTextBlock>
 
 static const char *informationalColorOpt = "options.ui.look.colors.messages.informational";
-
+static const QRegExp underlineFixRE("(<a href=\"addnick://psi/[^\"]*\"><span style=\")");
+static const QRegExp removeTagsRE("<[^>]*>");
 //----------------------------------------------------------------------------
 // ChatView
 //----------------------------------------------------------------------------
@@ -317,8 +318,6 @@ void ChatView::dispatchMessage(const MessageView &mv)
 				QRegExp msgRE(
 						"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*</span> )(.*)<a name=\"msgid_" + replaceId + "_"
 								+ mv.userId() + "\"></a>.*</p>");
-				QRegExp underlineFixRE(
-						"(<a href=\"addnick://psi/[^\"]*\"><span style=\")");
 				moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
 				while (!textCursor().atStart()) {
 					moveCursor(QTextCursor::EndOfBlock, QTextCursor::MoveAnchor);
@@ -333,7 +332,7 @@ void ChatView::dispatchMessage(const MessageView &mv)
 					QString srcHtml = textCursor().selection().toHtml();
 					if (msgRE.indexIn(srcHtml) >= 0) {
 						QString oldText = msgRE.cap(2);
-						oldText.replace(QRegExp("<[^>]*>"), "");
+						oldText.replace(removeTagsRE, "");
 						srcHtml.replace(msgRE, "\\1" +
 								mv.formattedText()
 										+ "<img src=\"icon:log_icon_corrected\" title=\""
