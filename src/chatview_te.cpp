@@ -315,9 +315,14 @@ void ChatView::dispatchMessage(const MessageView &mv)
 		case MessageView::Message:
 			if (!replaceId.isEmpty()) {
 				QTextCursor saved = textCursor();
-				QRegExp msgRE(
-						"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*</span> )(.*)<a name=\"msgid_" + replaceId + "_"
-								+ mv.userId() + "\"></a>.*</p>");
+				QRegExp msgRE;
+				if (PsiOptions::instance()->getOption("options.ui.chat.use-chat-says-style").toBool()) {
+					msgRE.setPattern("(<br />)(.*)<a name=\"msgid_" + replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+				} else {
+					msgRE.setPattern(
+							"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*</span> )(.*)<a name=\"msgid_"
+									+ replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+				}
 				moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
 				while (!textCursor().atStart()) {
 					moveCursor(QTextCursor::EndOfBlock, QTextCursor::MoveAnchor);
