@@ -40,7 +40,8 @@
 #include <QTextBlock>
 
 static const char *informationalColorOpt = "options.ui.look.colors.messages.informational";
-
+static const QRegExp underlineFixRE("(<a href=\"addnick://psi/[^\"]*\"><span style=\")");
+static const QRegExp removeTagsRE("<[^>]*>");
 //----------------------------------------------------------------------------
 // ChatView
 //----------------------------------------------------------------------------
@@ -314,11 +315,14 @@ void ChatView::dispatchMessage(const MessageView &mv)
 		case MessageView::Message:
 			if (!replaceId.isEmpty()) {
 				QTextCursor saved = textCursor();
-				QRegExp msgRE(
-						"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*</span> )(.*)<a name=\"msgid_" + replaceId + "_"
-								+ mv.userId() + "\"></a>.*</p>");
-				QRegExp underlineFixRE(
-						"(<a href=\"addnick://psi/[^\"]*\"><span style=\")");
+				QRegExp msgRE;
+				if (PsiOptions::instance()->getOption("options.ui.chat.use-chat-says-style").toBool()) {
+					msgRE.setPattern("(<br />)(.*)<a name=\"msgid_" + replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+				} else {
+					msgRE.setPattern(
+							"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*</span> )(.*)<a name=\"msgid_"
+									+ replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+				}
 				moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
 				while (!textCursor().atStart()) {
 					moveCursor(QTextCursor::EndOfBlock, QTextCursor::MoveAnchor);
@@ -333,7 +337,7 @@ void ChatView::dispatchMessage(const MessageView &mv)
 					QString srcHtml = textCursor().selection().toHtml();
 					if (msgRE.indexIn(srcHtml) >= 0) {
 						QString oldText = msgRE.cap(2);
-						oldText.replace(QRegExp("<[^>]*>"), "");
+						oldText.replace(removeTagsRE, "");
 						srcHtml.replace(msgRE, "\\1" +
 								mv.formattedText()
 										+ "<img src=\"icon:log_icon_corrected\" title=\""
