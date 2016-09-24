@@ -14,7 +14,6 @@ struct CurrentUpload {
 	int account = -1;
 	QString getUrl;
 	QString type;
-	bool isActive = false;
 };
 
 #endif /* SRC_PLUGINS_GENERIC_HTTPUPLOADPLUGIN_CURRENTUPLOAD_H_ */

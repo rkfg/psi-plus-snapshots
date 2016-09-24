@@ -53,8 +53,8 @@
 #include "currentupload.h"
 
 #define constVersion "0.1.0"
-
 #define CONST_LAST_FOLDER "httpupload-lastfolder"
+#define SLOT_TIMEOUT 10000
 
 class HttpUploadPlugin: public QObject,
 		public PsiPlugin,
@@ -130,6 +130,7 @@ private slots:
 	void uploadFile();
 	void uploadImage();
 	void uploadComplete(QNetworkReply* reply);
+	void timeout();
 
 private:
 	void upload(bool anything);
@@ -146,8 +147,15 @@ private:
 		return account;
 	}
 
+	void cancelTimeout() {
+		slotTimeout.stop();
+		if (dataSource) {
+			dataSource->deleteLater();
+		}
+	}
 	void processServices(const QDomElement& query, int account);
 	void processOneService(const QDomElement& query, const QString& service, int account);
+	void processUploadSlot(const QDomElement& xml);
 
 	IconFactoryAccessingHost* iconHost;
 	StanzaSendingHost* stanzaSender;
@@ -161,6 +169,7 @@ private:
 	QMap<QString, UploadService> serviceNames;
 	QPointer<QIODevice> dataSource;
 	CurrentUpload currentUpload;
+	QTimer slotTimeout;
 };
 
 #ifndef HAVE_QT5
@@ -171,6 +180,8 @@ HttpUploadPlugin::HttpUploadPlugin() :
 		iconHost(0), stanzaSender(0), activeTab(0), accInfo(0), psiController(0), psiOptions(0), enabled(false), manager(
 				new QNetworkAccessManager(this)) {
 	connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(uploadComplete(QNetworkReply*)));
+	connect(&slotTimeout, SIGNAL(timeout()), this, SLOT(timeout()));
+	slotTimeout.setSingleShot(true);
 }
 
 QString HttpUploadPlugin::name() const {
@@ -272,6 +283,13 @@ void HttpUploadPlugin::uploadImage() {
 void HttpUploadPlugin::upload(bool anything) {
 	if (!enabled)
 		return;
+	if (dataSource) {
+		QMessageBox::warning(0, tr("Please wait"),
+				tr(
+						"Another upload operation is already in progress. Please wait up to %1 sec for it to complete or fail.").arg(
+				SLOT_TIMEOUT / 1000));
+		return;
+	}
 	QString serviceName;
 	int sizeLimit = -1;
 	int account = accountNumber();
@@ -284,7 +302,7 @@ void HttpUploadPlugin::upload(bool anything) {
 	}
 	serviceName = iter->serviceName();
 	sizeLimit = iter->sizeLimit();
-	QString fileName("");
+	QString fileName;
 	QString jid = activeTab->getYourJid();
 	QString jidToSend = activeTab->getJid();
 
@@ -304,24 +322,7 @@ void HttpUploadPlugin::upload(bool anything) {
 	QPixmap pix(fileName);
 	imageName = fileInfo.fileName();
 	psiOptions->setPluginOption(CONST_LAST_FOLDER, fileInfo.path());
-	QString mimeType;
-	/*if (imageName.endsWith(".jpg") || imageName.endsWith(".jpeg")) {
-		mimeType = "image/jpeg";
-	} else if (imageName.endsWith(".png")) {
-		mimeType = "image/png";
-	} else if (imageName.endsWith(".gif")) {
-		mimeType = "image/gif";
-	} else {*/
-		mimeType = "application/octet-stream";
-	//}
-#ifdef DOSCALE
-	if (pix.height() > MAX_SIZE || pix.width() > MAX_SIZE) {
-		pix = pix.scaled(MAX_SIZE, MAX_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-	}
-#endif
-	if (dataSource) {
-		dataSource->deleteLater();
-	}
+	QString mimeType("application/octet-stream");
 	int length;
 	if (!anything && (pix.width() > 1024 || pix.height() > 1024)) {
 		auto image = new QByteArray();
@@ -344,12 +345,7 @@ void HttpUploadPlugin::upload(bool anything) {
 				tr("File size must be less than %1 bytes").arg(sizeLimit));
 		return;
 	}
-	/*QString imageBase64(image.toBase64());
-	 if (length > 61440) {
-	 QMessageBox::information(0, tr("The image size is too large."), tr("Image size must be less than 60 kb"));
-	 }*/
 	currentUpload.account = account;
-	currentUpload.isActive = true;
 	currentUpload.from = jid;
 	currentUpload.to = jidToSend;
 	currentUpload.type =
@@ -361,9 +357,9 @@ void HttpUploadPlugin::upload(bool anything) {
 			"<size>%5</size>"
 			"<content-type>%6</content-type>"
 			"</request>"
-			"</iq>").arg(jid).arg(stanzaSender->uniqueId(account)).arg(serviceName).arg(Qt::escape(imageName)).arg(
-			length).arg(mimeType);
+			"</iq>").arg(jid).arg(getId(account)).arg(serviceName).arg(Qt::escape(imageName)).arg(length).arg(mimeType);
 	qDebug() << "Requesting slot:" << slotRequestStanza;
+	slotTimeout.start(SLOT_TIMEOUT);
 	stanzaSender->sendStanza(account, slotRequestStanza);
 }
 
@@ -440,6 +436,46 @@ void HttpUploadPlugin::processOneService(const QDomElement& query, const QString
 	}
 }
 
+void HttpUploadPlugin::processUploadSlot(const QDomElement& xml) {
+	if (xml.firstChildElement("request").attribute("xmlns") == "urn:xmpp:http:upload") {
+		QDomElement error = xml.firstChildElement("error");
+		if (!error.isNull()) {
+			QString errorText = error.firstChildElement("text").text();
+			if (!errorText.isNull()) {
+				QMessageBox::critical(0, tr("Error requesting slot"), errorText);
+				cancelTimeout();
+				return;
+			}
+		}
+	}
+	QDomElement slot = xml.firstChildElement("slot");
+	if (slot.attribute("xmlns") == "urn:xmpp:http:upload") {
+		slotTimeout.stop();
+		QString put = slot.firstChildElement("put").text();
+		qDebug() << "PUT:" << put;
+		QString get = slot.firstChildElement("get").text();
+		qDebug() << "GET:" << get;
+		if (get.isEmpty() || put.isEmpty()) {
+			QMessageBox::critical(0, tr("Error requesting slot"),
+					tr("Either put or get URL is missing in the server's reply."));
+			cancelTimeout();
+			return;
+		}
+		currentUpload.getUrl = get;
+		QNetworkRequest req;
+		req.setUrl(QUrl(put));
+		if (!dataSource) {
+			QMessageBox::critical(0, tr("Error uploading"),
+					tr("No data to upload, this maybe a result of timeout or other error."));
+			cancelTimeout();
+			return;
+		}
+		qint64 size = dataSource->size();
+		req.setHeader(QNetworkRequest::ContentLengthHeader, size);
+		manager->put(req, dataSource);
+	}
+}
+
 bool HttpUploadPlugin::incomingStanza(int account, const QDomElement& xml) {
 	/*QString s;
 	 QTextStream str(&s, QIODevice::WriteOnly);
@@ -455,34 +491,7 @@ bool HttpUploadPlugin::incomingStanza(int account, const QDomElement& xml) {
 				processOneService(query, xml.attribute("from"), account);
 			}
 		} else {
-			QDomElement error = xml.firstChildElement("error");
-			if (!error.isNull()) {
-				QString errorText = error.firstChildElement("text").text();
-				if (!errorText.isNull()) {
-					QMessageBox::critical(0, tr("Error requesting slot"), errorText);
-					return false;
-				}
-			} else {
-				QDomElement slot = xml.firstChildElement("slot");
-				if (slot.attribute("xmlns") == "urn:xmpp:http:upload") {
-					QString put = slot.firstChildElement("put").text();
-					qDebug() << "PUT:" << put;
-					QString get = slot.firstChildElement("get").text();
-					qDebug() << "GET:" << get;
-					if (get.isEmpty() || put.isEmpty()) {
-						QMessageBox::critical(0, tr("Error requesting slot"),
-								tr("Either put or get URL is missing in the server's reply."));
-						return false;
-					}
-					currentUpload.getUrl = get;
-					QNetworkRequest req;
-					req.setUrl(QUrl(put));
-					qint64 size = dataSource->size();
-					qDebug() << "Size:" << size;
-					req.setHeader(QNetworkRequest::ContentLengthHeader, size);
-					manager->put(req, dataSource);
-				}
-			}
+			processUploadSlot(xml);
 		}
 	}
 	return false;
@@ -502,7 +511,13 @@ void HttpUploadPlugin::uploadComplete(QNetworkReply* reply) {
 				tr("Upload error code %1, message: %2").arg(statusCode).arg(
 						reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString()));
 	}
-	currentUpload.isActive = false;
+}
+
+void HttpUploadPlugin::timeout() {
+	if (dataSource) {
+		dataSource->deleteLater();
+	}
+	QMessageBox::critical(0, tr("Error requesting slot"), tr("Timeout waiting for an upload slot"));
 }
 
 #include "httpuploadplugin.moc"
