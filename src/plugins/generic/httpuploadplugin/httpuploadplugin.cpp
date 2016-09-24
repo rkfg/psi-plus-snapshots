@@ -45,10 +45,12 @@
 #include <QTextDocument>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkRequest>
+#include <QtNetwork/QNetworkReply>
 #include "chattabaccessor.h"
 #include "stanzafilter.h"
 #include <QDomElement>
 #include "uploadservice.h"
+#include "currentupload.h"
 
 #define constVersion "0.1.0"
 
@@ -158,7 +160,7 @@ private:
 	QNetworkAccessManager* manager;
 	QMap<QString, UploadService> serviceNames;
 	QPointer<QIODevice> dataSource;
-	QString getUrl;
+	CurrentUpload currentUpload;
 };
 
 #ifndef HAVE_QT5
@@ -168,6 +170,7 @@ Q_EXPORT_PLUGIN(HttpUploadPlugin)
 HttpUploadPlugin::HttpUploadPlugin() :
 		iconHost(0), stanzaSender(0), activeTab(0), accInfo(0), psiController(0), psiOptions(0), enabled(false), manager(
 				new QNetworkAccessManager(this)) {
+	connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(uploadComplete(QNetworkReply*)));
 }
 
 QString HttpUploadPlugin::name() const {
@@ -302,29 +305,40 @@ void HttpUploadPlugin::upload(bool anything) {
 	imageName = fileInfo.fileName();
 	psiOptions->setPluginOption(CONST_LAST_FOLDER, fileInfo.path());
 	QString mimeType;
-	if (imageName.endsWith(".jpg") || imageName.endsWith(".jpeg")) {
+	/*if (imageName.endsWith(".jpg") || imageName.endsWith(".jpeg")) {
 		mimeType = "image/jpeg";
 	} else if (imageName.endsWith(".png")) {
 		mimeType = "image/png";
 	} else if (imageName.endsWith(".gif")) {
 		mimeType = "image/gif";
-	} else {
+	} else {*/
 		mimeType = "application/octet-stream";
-	}
+	//}
 #ifdef DOSCALE
 	if (pix.height() > MAX_SIZE || pix.width() > MAX_SIZE) {
 		pix = pix.scaled(MAX_SIZE, MAX_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 	}
 #endif
-	QByteArray image;
-	QBuffer b(&image);
+	if (dataSource) {
+		dataSource->deleteLater();
+	}
 	int length;
-	/*if (!anything) {
-	 pix.save(&b, mimeType.toLatin1().constData());
-	 length = image.length();
-	 } else {*/
-	length = fileInfo.size();
-	//}
+	if (!anything && (pix.width() > 1024 || pix.height() > 1024)) {
+		auto image = new QByteArray();
+		dataSource = new QBuffer(image);
+		pix.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(dataSource, "jpg");
+		length = image->length();
+		qDebug() << "Resized length:" << length;
+		dataSource->open(QIODevice::ReadOnly);
+	} else {
+		length = fileInfo.size();
+		dataSource = new QFile(fileName, this);
+		if (!dataSource->open(QIODevice::ReadOnly)) {
+			dataSource->deleteLater();
+			QMessageBox::critical(0, tr("Error"), tr("Error opening file %1").arg(fileName));
+			return;
+		}
+	}
 	if (length > sizeLimit) {
 		QMessageBox::critical(0, tr("The file size is too large."),
 				tr("File size must be less than %1 bytes").arg(sizeLimit));
@@ -334,30 +348,23 @@ void HttpUploadPlugin::upload(bool anything) {
 	 if (length > 61440) {
 	 QMessageBox::information(0, tr("The image size is too large."), tr("Image size must be less than 60 kb"));
 	 }*/
-	if (dataSource) {
-		dataSource->deleteLater();
-	}
-	dataSource = new QFile(fileName, this);
-	QString slotRequestStanza =
-			QString(
-					"<iq from='%1' \
-    id='%2' \
-    to='%3' \
-    type='get'> \
-    <request xmlns='urn:xmpp:http:upload'> \
-    <filename>%4</filename> \
-    <size>%5</size> \
-    <content-type>%6</content-type> \
-    </request> \
-    </iq>").arg(
-					jid).arg(stanzaSender->uniqueId(account)).arg(serviceName).arg(Qt::escape(imageName)).arg(length).arg(
-					mimeType);
+	currentUpload.account = account;
+	currentUpload.isActive = true;
+	currentUpload.from = jid;
+	currentUpload.to = jidToSend;
+	currentUpload.type =
+			QLatin1String(sender()->parent()->metaObject()->className()) == "PsiChatDlg" ? "chat" : "groupchat";
+
+	QString slotRequestStanza = QString("<iq from='%1' id='%2' to='%3' type='get'>"
+			"<request xmlns='urn:xmpp:http:upload'>"
+			"<filename>%4</filename>"
+			"<size>%5</size>"
+			"<content-type>%6</content-type>"
+			"</request>"
+			"</iq>").arg(jid).arg(stanzaSender->uniqueId(account)).arg(serviceName).arg(Qt::escape(imageName)).arg(
+			length).arg(mimeType);
 	qDebug() << "Requesting slot:" << slotRequestStanza;
 	stanzaSender->sendStanza(account, slotRequestStanza);
-	/*psiController->appendSysMsg(account, jidToSend,
-	 tr("Image %1 sent <br/><img src=\"data:image/%2;base64,%3\" alt=\"img\"/> ").arg(imageName).arg(mimeType).arg(
-	 imageBase64));*/
-
 }
 
 QString HttpUploadPlugin::pluginInfo() {
@@ -377,12 +384,9 @@ void HttpUploadPlugin::checkUploadAvailability(int account) {
 	if (jidRE.indexIn(curJid) == 0) {
 		QString domain = jidRE.cap(2);
 		QString id = getId(account);
-		QString disco =
-				QString(
-						"<iq from='%1' id='%2' to='%3' type='get'>\
-		<query xmlns='http://jabber.org/protocol/disco#items'/>\
-		</iq>").arg(
-						curJid).arg(id).arg(domain);
+		QString disco = QString("<iq from='%1' id='%2' to='%3' type='get'>"
+				"<query xmlns='http://jabber.org/protocol/disco#items'/>"
+				"</iq>").arg(curJid).arg(id).arg(domain);
 		stanzaSender->sendStanza(account, disco);
 	}
 }
@@ -394,10 +398,9 @@ void HttpUploadPlugin::processServices(const QDomElement& query, int account) {
 		auto elem = nodes.item(i).toElement();
 		if (elem.tagName() == "item") {
 			QString serviceJid = elem.attribute("jid");
-			QString serviceDiscoStanza =
-					QString(
-							"<iq from='%1' id='%2' to='%3' type='get'><query xmlns='http://jabber.org/protocol/disco#info'/></iq>").arg(
-							curJid).arg(getId(account)).arg(serviceJid);
+			QString serviceDiscoStanza = QString("<iq from='%1' id='%2' to='%3' type='get'>"
+					"<query xmlns='http://jabber.org/protocol/disco#info'/>"
+					"</iq>").arg(curJid).arg(getId(account)).arg(serviceJid);
 			qDebug() << "Discovering service" << serviceJid;
 			stanzaSender->sendStanza(account, serviceDiscoStanza);
 		}
@@ -467,18 +470,39 @@ bool HttpUploadPlugin::incomingStanza(int account, const QDomElement& xml) {
 					QString get = slot.firstChildElement("get").text();
 					qDebug() << "GET:" << get;
 					if (get.isEmpty() || put.isEmpty()) {
-						QMessageBox::critical(0, tr("Error requesting slot"), tr("Either put or get URL is missing in the server's reply."));
+						QMessageBox::critical(0, tr("Error requesting slot"),
+								tr("Either put or get URL is missing in the server's reply."));
 						return false;
 					}
-					getUrl = get;
+					currentUpload.getUrl = get;
 					QNetworkRequest req;
 					req.setUrl(QUrl(put));
+					qint64 size = dataSource->size();
+					qDebug() << "Size:" << size;
+					req.setHeader(QNetworkRequest::ContentLengthHeader, size);
 					manager->put(req, dataSource);
 				}
 			}
 		}
 	}
 	return false;
+}
+
+void HttpUploadPlugin::uploadComplete(QNetworkReply* reply) {
+	bool ok;
+	int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(&ok);
+	if (ok && statusCode == 201) {
+		QString message = QString("<message type=\"%1\" to=\"%2\" id=\"%3\" >"
+				"<body>%4</body>"
+				"</message>").arg(currentUpload.type).arg(currentUpload.to).arg(getId(currentUpload.account)).arg(
+				currentUpload.getUrl);
+		stanzaSender->sendStanza(currentUpload.account, message);
+	} else {
+		QMessageBox::critical(0, tr("Error uploading"),
+				tr("Upload error code %1, message: %2").arg(statusCode).arg(
+						reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString()));
+	}
+	currentUpload.isActive = false;
 }
 
 #include "httpuploadplugin.moc"
