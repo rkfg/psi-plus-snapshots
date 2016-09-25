@@ -51,10 +51,15 @@
 #include <QDomElement>
 #include "uploadservice.h"
 #include "currentupload.h"
+#include <QCheckBox>
+#include <QSpinBox>
 
 #define constVersion "0.1.0"
 #define CONST_LAST_FOLDER "httpupload-lastfolder"
 #define SLOT_TIMEOUT 10000
+#define OPTION_RESIZE "httpupload-do-resize"
+#define OPTION_SIZE "httpupload-image-size"
+#define OPTION_QUALITY "httpupload-image-quality"
 
 class HttpUploadPlugin: public QObject,
 		public PsiPlugin,
@@ -85,10 +90,8 @@ public:
 	virtual bool enable();
 	virtual bool disable();
 
-	virtual void applyOptions() {
-	}
-	virtual void restoreOptions() {
-	}
+	virtual void applyOptions();
+	virtual void restoreOptions();
 	virtual QList<QVariantHash> getButtonParam();
 	virtual QAction* getAction(QObject*, int, const QString&) {
 		return 0;
@@ -131,6 +134,7 @@ private slots:
 	void uploadImage();
 	void uploadComplete(QNetworkReply* reply);
 	void timeout();
+	void resizeStateChanged(int state);
 
 private:
 	void upload(bool anything);
@@ -170,6 +174,12 @@ private:
 	QPointer<QIODevice> dataSource;
 	CurrentUpload currentUpload;
 	QTimer slotTimeout;
+	QCheckBox *cb_resize = 0;
+	QSpinBox *sb_size = 0;
+	QSpinBox *sb_quality = 0;
+	bool imageResize = false;
+	int imageSize = 0;
+	int imageQuality = 0;
 };
 
 #ifndef HAVE_QT5
@@ -214,6 +224,9 @@ bool HttpUploadPlugin::enable() {
 	} else {
 		enabled = false;
 	}
+	imageResize = psiOptions->getPluginOption(OPTION_RESIZE, false).toBool();
+	imageSize = psiOptions->getPluginOption(OPTION_SIZE, 1024).toInt();
+	imageQuality = psiOptions->getPluginOption(OPTION_QUALITY, 75).toInt();
 	return enabled;
 }
 
@@ -228,11 +241,22 @@ QWidget* HttpUploadPlugin::options() {
 	}
 	QWidget *optionsWid = new QWidget();
 	QVBoxLayout *vbox = new QVBoxLayout(optionsWid);
-	QLabel *wikiLink = new QLabel(tr("<a href=\"http://psi-plus.com/wiki/plugins#image_plugin\">Wiki (Online)</a>"),
-			optionsWid);
-	wikiLink->setOpenExternalLinks(true);
-	vbox->addWidget(wikiLink);
+	cb_resize = new QCheckBox(tr("Resize images"));
+	vbox->addWidget(cb_resize);
+	vbox->addWidget(new QLabel(tr("If width or height is bigger than")));
+	sb_size = new QSpinBox();
+	sb_size->setMinimum(1);
+	sb_size->setMaximum(65535);
+	sb_size->setEnabled(false);
+	vbox->addWidget(sb_size);
+	vbox->addWidget(new QLabel(tr("JPEG quality")));
+	sb_quality = new QSpinBox();
+	sb_quality->setMinimum(1);
+	sb_quality->setMaximum(100);
+	sb_quality->setEnabled(false);
+	vbox->addWidget(sb_quality);
 	vbox->addStretch();
+	connect(cb_resize, SIGNAL(stateChanged(int)), this, SLOT(resizeStateChanged(int)));
 	return optionsWid;
 }
 
@@ -331,12 +355,21 @@ void HttpUploadPlugin::upload(bool anything) {
 	QPixmap pix(fileName);
 	imageName = fileInfo.fileName();
 	psiOptions->setPluginOption(CONST_LAST_FOLDER, fileInfo.path());
-	QString mimeType("application/octet-stream");
+	QString mimeType("application/octet-stream"); // proper MIME detection is possible with Qt5, for upload purposes this should be fine
 	int length;
-	if (!anything && (pix.width() > 1024 || pix.height() > 1024)) {
+	QString lowerImagename = imageName.toLower();
+	// only resize jpg and png
+	if (!anything && imageResize
+			&& (lowerImagename.endsWith(".jpg") || lowerImagename.endsWith(".jpeg") || lowerImagename.endsWith(".png"))
+			&& (pix.width() > imageSize || pix.height() > imageSize)) {
 		auto image = new QByteArray();
 		dataSource = new QBuffer(image);
-		pix.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(dataSource, "jpg");
+		QString type = "jpg";
+		if (lowerImagename.endsWith(".png")) {
+			type = "png";
+		}
+		pix.scaled(imageSize, imageSize, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(dataSource,
+				type.toLatin1().constData(), imageQuality);
 		length = image->length();
 		qDebug() << "Resized length:" << length;
 		dataSource->open(QIODevice::ReadOnly);
@@ -377,7 +410,7 @@ QString HttpUploadPlugin::pluginInfo() {
 }
 
 QPixmap HttpUploadPlugin::icon() const {
-	return QPixmap(":/httpuploadplugin/upload_image.gif");
+	return QPixmap(":/httpuploadplugin/upload_image.png");
 }
 
 void HttpUploadPlugin::checkUploadAvailability(int account) {
@@ -537,6 +570,23 @@ void HttpUploadPlugin::timeout() {
 		dataSource->deleteLater();
 	}
 	QMessageBox::critical(0, tr("Error requesting slot"), tr("Timeout waiting for an upload slot"));
+}
+
+void HttpUploadPlugin::applyOptions() {
+	psiOptions->setPluginOption(OPTION_RESIZE, imageResize = cb_resize->checkState() == Qt::Checked);
+	psiOptions->setPluginOption(OPTION_SIZE, imageSize = sb_size->value());
+	psiOptions->setPluginOption(OPTION_QUALITY, imageQuality = sb_quality->value());
+}
+void HttpUploadPlugin::restoreOptions() {
+	sb_size->setValue(imageSize);
+	sb_quality->setValue(imageQuality);
+	cb_resize->setCheckState(imageResize ? Qt::Checked : Qt::Unchecked);
+}
+
+void HttpUploadPlugin::resizeStateChanged(int state) {
+	bool enabled = state == Qt::Checked;
+	sb_size->setEnabled(enabled);
+	sb_quality->setEnabled(enabled);
 }
 
 #include "httpuploadplugin.moc"
