@@ -196,12 +196,21 @@ QString HttpUploadPlugin::version() const {
 }
 
 bool HttpUploadPlugin::enable() {
-	QFile file(":/httpuploadplugin/httpuploadplugin.gif");
-	if (file.open(QIODevice::ReadOnly)) {
-		QByteArray image = file.readAll();
-		iconHost->addIcon("httpuploadplugin/icon", image);
-		file.close();
-		enabled = true;
+	QFile image_icon(":/httpuploadplugin/upload_image.png");
+	QByteArray image;
+	enabled = true;
+	if (image_icon.open(QIODevice::ReadOnly)) {
+		image = image_icon.readAll();
+		iconHost->addIcon("httpuploadplugin/upload_image", image);
+		image_icon.close();
+	} else {
+		enabled = false;
+	}
+	QFile file_icon(":/httpuploadplugin/upload_file.png");
+	if (file_icon.open(QIODevice::ReadOnly)) {
+		image = file_icon.readAll();
+		iconHost->addIcon("httpuploadplugin/upload_file", image);
+		file_icon.close();
 	} else {
 		enabled = false;
 	}
@@ -231,13 +240,13 @@ QList<QVariantHash> HttpUploadPlugin::getButtonParam() {
 	QList<QVariantHash> l;
 	QVariantHash uploadImg;
 	uploadImg["tooltip"] = tr("Upload Image");
-	uploadImg["icon"] = QString("httpuploadplugin/icon");
+	uploadImg["icon"] = QString("httpuploadplugin/upload_image");
 	uploadImg["reciver"] = qVariantFromValue(qobject_cast<QObject *>(this));
 	uploadImg["slot"] = QVariant(SLOT(uploadImage()));
 	l.push_back(uploadImg);
 	QVariantHash uploadFile;
 	uploadFile["tooltip"] = tr("Upload File");
-	uploadFile["icon"] = QString("httpuploadplugin/icon");
+	uploadFile["icon"] = QString("httpuploadplugin/upload_file");
 	uploadFile["reciver"] = qVariantFromValue(qobject_cast<QObject *>(this));
 	uploadFile["slot"] = QVariant(SLOT(uploadFile()));
 	l.push_back(uploadFile);
@@ -368,7 +377,7 @@ QString HttpUploadPlugin::pluginInfo() {
 }
 
 QPixmap HttpUploadPlugin::icon() const {
-	return QPixmap(":/httpuploadplugin/httpuploadplugin.gif");
+	return QPixmap(":/httpuploadplugin/upload_image.gif");
 }
 
 void HttpUploadPlugin::checkUploadAvailability(int account) {
