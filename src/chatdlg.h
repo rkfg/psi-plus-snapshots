@@ -168,11 +168,11 @@ protected:
 	virtual void updateJidWidget(const QList<UserListItem*> &ul, int status, bool fromPresence);
 	virtual void contactUpdated(UserListItem* u, int status, const QString& statusString);
 
-	void appendMessage(const Message &, bool local = false);
 	virtual bool isEncryptionEnabled() const;
 
 public:
 	virtual void appendSysMsg(const QString& txt) = 0;
+	void appendMessage(const Message &, bool local = false);
 
 protected:
 	virtual void nicksChanged();

@@ -14,6 +14,7 @@ SUBDIRS += attentionplugin \
     gmailserviceplugin \
     gomokugameplugin \
     historykeeperplugin \
+    httpuploadplugin \
     icqdieplugin \
     imageplugin \
     imagepreviewplugin \
