@@ -501,11 +501,21 @@ void HttpUploadPlugin::uploadComplete(QNetworkReply* reply) {
 	bool ok;
 	int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(&ok);
 	if (ok && statusCode == 201) {
-		QString message = QString("<message type=\"%1\" to=\"%2\" id=\"%3\" >"
+		QString id = getId(currentUpload.account);
+		QString receipt(
+				psiOptions->getGlobalOption("options.ui.notifications.request-receipts").toBool() ?
+						"<request xmlns='urn:xmpp:receipts'/>" : "");
+		QString message = QString("<message type=\"%1\" to=\"%2\" id=\"%3\">"
 				"<body>%4</body>"
-				"</message>").arg(currentUpload.type).arg(currentUpload.to).arg(getId(currentUpload.account)).arg(
-				currentUpload.getUrl);
+				"%5"
+				"</message>").arg(currentUpload.type).arg(currentUpload.to).arg(id).arg(currentUpload.getUrl).arg(
+				receipt);
 		stanzaSender->sendStanza(currentUpload.account, message);
+		if (currentUpload.type == "chat") {
+			// manually add outgoing message to the regular chats, in MUC this isn't needed
+			psiController->appendMsg(currentUpload.account, currentUpload.to, currentUpload.getUrl, id);
+		}
+		cancelTimeout();
 	} else {
 		QMessageBox::critical(0, tr("Error uploading"),
 				tr("Upload error code %1, message: %2").arg(statusCode).arg(
