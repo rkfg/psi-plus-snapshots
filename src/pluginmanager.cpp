@@ -50,7 +50,7 @@ public:
 		return manager->incomingXml(account, e);
 	}
 	void onDisconnect() {
-
+		// never finish on client disconnect
 	}
 	PluginManager* manager;
 	int account;
