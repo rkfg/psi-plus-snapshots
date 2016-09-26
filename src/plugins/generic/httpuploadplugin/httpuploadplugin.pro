@@ -11,5 +11,7 @@ isEmpty(PSISDK) {
 RESOURCES = httpuploadplugin.qrc
 
 SOURCES += httpuploadplugin.cpp \
-		   uploadservice.cpp
+		   uploadservice.cpp \
+		   previewfiledialog.cpp \
 
+HEADERS += previewfiledialog.h
