@@ -1,6 +1,6 @@
 /*
  * imageplugin.cpp - plugin
- * Copyright (C) 2009-2010  VampiRus
+ * Copyright (C) 2016 rkfg
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -186,13 +186,6 @@ QWidget* ImagePreviewPlugin::options() {
 	sb_previewSize->setMaximum(65535);
 	vbox->addWidget(new QLabel(tr("Image preview size in pixels")));
 	vbox->addWidget(sb_previewSize);
-	QLabel *wikiLink =
-			new QLabel(
-					tr(
-							"<a href=\"http://psi-plus.com/wiki/plugins#image_plugin\">Wiki (Online)</a>"),
-					optionsWid);
-	wikiLink->setOpenExternalLinks(true);
-	vbox->addWidget(wikiLink);
 	vbox->addStretch();
 	return optionsWid;
 }
