@@ -317,13 +317,14 @@ void ChatView::dispatchMessage(const MessageView &mv)
 				QTextCursor saved = textCursor();
 				QRegExp msgRE;
 				int capIndex;
+				QString msgid = QRegExp::escape(TextUtil::escape("msgid_" + replaceId + "_" + mv.userId()));
 				if (PsiOptions::instance()->getOption("options.ui.chat.use-chat-says-style").toBool()) {
-					msgRE.setPattern("(<br />)(.*)<a name=\"msgid_" + replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+					msgRE.setPattern("(<br />)(.*)<a name=\"" + msgid + "\"></a>.*</p>");
 					capIndex = 2;
 				} else {
 					msgRE.setPattern(
-							"((<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*)?</span> )(.*)<a name=\"msgid_"
-									+ replaceId + "_" + mv.userId() + "\"></a>.*</p>");
+							"((<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*)?</span> )(.*)<a name=\""
+									+ msgid + "\"></a>.*</p>");
 					capIndex = 3;
 				}
 				moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
