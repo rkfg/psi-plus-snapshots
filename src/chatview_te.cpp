@@ -323,9 +323,11 @@ void ChatView::dispatchMessage(const MessageView &mv)
 					capIndex = 2;
 				} else {
 					msgRE.setPattern(
-							"((<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a><span [^<]*)?</span> )(.*)<a name=\""
+							"(<a href=\"addnick://psi/[^\"]*\"><span [^<]*</span></a>"
+							"(<span [^>]*>&gt;</span>\\s*)?"
+							"<span [^>]*>)(\\s*)?(.*)<a name=\""
 									+ msgid + "\"></a>.*</p>");
-					capIndex = 3;
+					capIndex = 4;
 				}
 				moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
 				while (!textCursor().atStart()) {
@@ -342,10 +344,10 @@ void ChatView::dispatchMessage(const MessageView &mv)
 					if (msgRE.indexIn(srcHtml) >= 0) {
 						QString oldText = msgRE.cap(capIndex);
 						oldText.replace(removeTagsRE, "");
-						srcHtml.replace(msgRE, "\\1" +
+						srcHtml.replace(msgRE, "\\1\\3" +
 								mv.formattedText()
 										+ "<img src=\"icon:log_icon_corrected\" title=\""
-										+ oldText + "\" /></p>");
+										+ TextUtil::escape(oldText) + "\" /></p>");
 						srcHtml.replace(underlineFixRE, "\\1text-decoration: none;");
 						QTextCursor cur = textCursor();
 						PsiRichText::appendText(document(), cur, srcHtml, false);
