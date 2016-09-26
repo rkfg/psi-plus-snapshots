@@ -49,6 +49,9 @@ public:
 	bool take(const QDomElement& e) {
 		return manager->incomingXml(account, e);
 	}
+	void onDisconnect() {
+
+	}
 	PluginManager* manager;
 	int account;
 };
