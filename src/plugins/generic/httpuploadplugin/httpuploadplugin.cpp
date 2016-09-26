@@ -565,7 +565,8 @@ void HttpUploadPlugin::uploadComplete(QNetworkReply* reply) {
 	if (ok && statusCode == 201) {
 		QString id = getId(currentUpload.account);
 		QString receipt(
-				psiOptions->getGlobalOption("options.ui.notifications.request-receipts").toBool() ?
+				currentUpload.type == "chat"
+						&& psiOptions->getGlobalOption("options.ui.notifications.request-receipts").toBool() ?
 						"<request xmlns='urn:xmpp:receipts'/>" : "");
 		QString message = QString("<message type=\"%1\" to=\"%2\" id=\"%3\">"
 				"<body>%4</body>"
