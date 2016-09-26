@@ -265,11 +265,9 @@ static void applyFormatToIcons(QTextDocument *doc, TextIconFormatQueue *queue, Q
 	QTextCursor searchCursor = cursor;
 	forever {
 		searchCursor = doc->find(QString(QChar::ObjectReplacementCharacter), searchCursor);
-		if (searchCursor.isNull()) {
+		if (searchCursor.isNull() || queue->isEmpty()) {
 			break;
 		}
-
-		Q_ASSERT(!queue->isEmpty());
 		TextIconFormat *format = queue->dequeue();
 		if (format) {
 			searchCursor.setCharFormat(*format);
