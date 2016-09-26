@@ -53,6 +53,7 @@
 #include "currentupload.h"
 #include <QCheckBox>
 #include <QSpinBox>
+#include "previewfiledialog.h"
 
 #define constVersion "0.1.0"
 #define CONST_LAST_FOLDER "httpupload-lastfolder"
@@ -60,9 +61,9 @@
 #define OPTION_RESIZE "httpupload-do-resize"
 #define OPTION_SIZE "httpupload-image-size"
 #define OPTION_QUALITY "httpupload-image-quality"
+#define OPTION_PREVIEW_WIDTH "httpupload-preview-width"
 
-QString escape(const QString &plain)
-{
+QString escape(const QString &plain) {
 #ifdef HAVE_QT5
 	return plain.toHtmlEscaped();
 #else
@@ -183,12 +184,14 @@ private:
 	QPointer<QIODevice> dataSource;
 	CurrentUpload currentUpload;
 	QTimer slotTimeout;
+	QSpinBox *sb_previewWidth = 0;
 	QCheckBox *cb_resize = 0;
 	QSpinBox *sb_size = 0;
 	QSpinBox *sb_quality = 0;
 	bool imageResize = false;
 	int imageSize = 0;
 	int imageQuality = 0;
+	int previewWidth = 0;
 };
 
 #ifndef HAVE_QT5
@@ -236,6 +239,7 @@ bool HttpUploadPlugin::enable() {
 	imageResize = psiOptions->getPluginOption(OPTION_RESIZE, false).toBool();
 	imageSize = psiOptions->getPluginOption(OPTION_SIZE, 1024).toInt();
 	imageQuality = psiOptions->getPluginOption(OPTION_QUALITY, 75).toInt();
+	previewWidth = psiOptions->getPluginOption(OPTION_PREVIEW_WIDTH, 150).toInt();
 	return enabled;
 }
 
@@ -250,6 +254,11 @@ QWidget* HttpUploadPlugin::options() {
 	}
 	QWidget *optionsWid = new QWidget();
 	QVBoxLayout *vbox = new QVBoxLayout(optionsWid);
+	vbox->addWidget(new QLabel(tr("Image preview width")));
+	sb_previewWidth = new QSpinBox();
+	sb_previewWidth->setMinimum(1);
+	sb_previewWidth->setMaximum(65535);
+	vbox->addWidget(sb_previewWidth);
 	cb_resize = new QCheckBox(tr("Resize images"));
 	vbox->addWidget(cb_resize);
 	vbox->addWidget(new QLabel(tr("If width or height is bigger than")));
@@ -354,11 +363,13 @@ void HttpUploadPlugin::upload(bool anything) {
 
 	QString imageName;
 	const QString lastPath = psiOptions->getPluginOption(CONST_LAST_FOLDER, QDir::homePath()).toString();
-	fileName = QFileDialog::getOpenFileName(0, anything ? tr("Upload file") : tr("Upload image"), lastPath,
-			anything ? "" : tr("Images (*.png *.gif *.jpg *.jpeg)"));
-	if (fileName.isEmpty())
+	PreviewFileDialog dlg(0, anything ? tr("Upload file") : tr("Upload image"), lastPath,
+			anything ? "" : tr("Images (*.png *.gif *.jpg *.jpeg)"), previewWidth);
+	dlg.setAcceptMode(QFileDialog::AcceptOpen);
+	if (!dlg.exec()) {
 		return;
-
+	}
+	fileName = dlg.selectedFiles()[0];
 	QFile file(fileName);
 	QFileInfo fileInfo(file);
 	QPixmap pix(fileName);
@@ -582,11 +593,13 @@ void HttpUploadPlugin::timeout() {
 }
 
 void HttpUploadPlugin::applyOptions() {
+	psiOptions->setPluginOption(OPTION_PREVIEW_WIDTH, previewWidth = sb_previewWidth->value());
 	psiOptions->setPluginOption(OPTION_RESIZE, imageResize = cb_resize->checkState() == Qt::Checked);
 	psiOptions->setPluginOption(OPTION_SIZE, imageSize = sb_size->value());
 	psiOptions->setPluginOption(OPTION_QUALITY, imageQuality = sb_quality->value());
 }
 void HttpUploadPlugin::restoreOptions() {
+	sb_previewWidth->setValue(previewWidth);
 	sb_size->setValue(imageSize);
 	sb_quality->setValue(imageQuality);
 	cb_resize->setCheckState(imageResize ? Qt::Checked : Qt::Unchecked);
