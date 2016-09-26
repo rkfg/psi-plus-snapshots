@@ -61,6 +61,15 @@
 #define OPTION_SIZE "httpupload-image-size"
 #define OPTION_QUALITY "httpupload-image-quality"
 
+QString escape(const QString &plain)
+{
+#ifdef HAVE_QT5
+	return plain.toHtmlEscaped();
+#else
+	return Qt::escape(plain);
+#endif
+}
+
 class HttpUploadPlugin: public QObject,
 		public PsiPlugin,
 		public ToolbarIconAccessor,
@@ -399,7 +408,7 @@ void HttpUploadPlugin::upload(bool anything) {
 			"<size>%5</size>"
 			"<content-type>%6</content-type>"
 			"</request>"
-			"</iq>").arg(jid).arg(getId(account)).arg(serviceName).arg(Qt::escape(imageName)).arg(length).arg(mimeType);
+			"</iq>").arg(jid).arg(getId(account)).arg(serviceName).arg(escape(imageName)).arg(length).arg(mimeType);
 	qDebug() << "Requesting slot:" << slotRequestStanza;
 	slotTimeout.start(SLOT_TIMEOUT);
 	stanzaSender->sendStanza(account, slotRequestStanza);
