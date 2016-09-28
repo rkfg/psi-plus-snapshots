@@ -19,30 +19,17 @@
  */
 
 #include "psiplugin.h"
-#include "activetabaccessinghost.h"
-#include "activetabaccessor.h"
-#include "iconfactoryaccessor.h"
-#include "iconfactoryaccessinghost.h"
-#include "stanzasender.h"
-#include "stanzasendinghost.h"
-#include "accountinfoaccessinghost.h"
-#include "accountinfoaccessor.h"
 #include "plugininfoprovider.h"
-#include "psiaccountcontroller.h"
-#include "psiaccountcontrollinghost.h"
 #include "optionaccessinghost.h"
 #include "optionaccessor.h"
 #include "chattabaccessor.h"
 #include <QDomElement>
 #include <QByteArray>
-#include <QFile>
-#include <QFileDialog>
 #include <QLabel>
 #include <QMessageBox>
 #include <QVBoxLayout>
 #include <QMenu>
 #include <QApplication>
-#include <QClipboard>
 #include <QDebug>
 #include <QTextEdit>
 #include <QtNetwork/QNetworkAccessManager>
@@ -61,8 +48,6 @@
 
 class ImagePreviewPlugin: public QObject,
 		public PsiPlugin,
-		public IconFactoryAccessor,
-		public ActiveTabAccessor,
 		public PluginInfoProvider,
 		public OptionAccessor,
 		public ChatTabAccessor {
@@ -70,9 +55,7 @@ Q_OBJECT
 #ifdef HAVE_QT5
 	Q_PLUGIN_METADATA(IID "com.psi-plus.ImagePreviewPlugin")
 #endif
-Q_INTERFACES(PsiPlugin
-		IconFactoryAccessor ActiveTabAccessor
-		PluginInfoProvider OptionAccessor ChatTabAccessor)
+Q_INTERFACES(PsiPlugin PluginInfoProvider OptionAccessor ChatTabAccessor)
 public:
 	ImagePreviewPlugin();
 	virtual QString name() const;
@@ -84,10 +67,6 @@ public:
 
 	virtual void applyOptions();
 	virtual void restoreOptions();
-	virtual void setIconFactoryAccessingHost(IconFactoryAccessingHost* host);
-	virtual void setActiveTabAccessingHost(ActiveTabAccessingHost* host);
-	virtual void setAccountInfoAccessingHost(AccountInfoAccessingHost* host);
-	virtual void setPsiAccountControllingHost(PsiAccountControllingHost *host);
 	virtual void setOptionAccessingHost(OptionAccessingHost *host);
 	virtual void optionChanged(const QString &) {
 	}
@@ -110,16 +89,10 @@ private slots:
 	void messageAppended(const QString &, QTextEdit*);
 	void imageReply(QNetworkReply* reply);
 private:
-	IconFactoryAccessingHost* iconHost;
-	ActiveTabAccessingHost* activeTab;
-	AccountInfoAccessingHost* accInfo;
-	PsiAccountControllingHost *psiController;
 	OptionAccessingHost *psiOptions;
 	bool enabled;
-	QHash<QString, int> accounts_;
 	QNetworkAccessManager* manager;
 	QSet<QString> pending;
-	QSet<QString> failed;
 	int previewSize = 0;
 	QPointer<QSpinBox> sb_previewSize;
 	int sizeLimit = 0;
@@ -133,8 +106,7 @@ Q_EXPORT_PLUGIN(ImagePreviewPlugin)
 #endif
 
 ImagePreviewPlugin::ImagePreviewPlugin() :
-		iconHost(0), activeTab(0), accInfo(0), psiController(0), psiOptions(0), enabled(false), manager(
-				new QNetworkAccessManager(this)) {
+		psiOptions(0), enabled(false), manager(new QNetworkAccessManager(this)) {
 	connect(manager, SIGNAL(finished(QNetworkReply *)), this, SLOT(imageReply(QNetworkReply *)));
 }
 
@@ -150,15 +122,7 @@ QString ImagePreviewPlugin::version() const {
 }
 
 bool ImagePreviewPlugin::enable() {
-	QFile file(":/imagepreviewplugin/imagepreviewplugin.gif");
-	if (file.open(QIODevice::ReadOnly)) {
-		QByteArray image = file.readAll();
-		iconHost->addIcon("imagepreviewplugin/icon", image);
-		file.close();
-		enabled = true;
-	} else {
-		enabled = false;
-	}
+	enabled = true;
 	sizeLimit = psiOptions->getPluginOption(sizeLimitName, 1024 * 1024).toInt();
 	previewSize = psiOptions->getPluginOption(previewSizeName, 150).toInt();
 	allowUpscale = psiOptions->getPluginOption(allowUpscaleName, true).toBool();
@@ -195,24 +159,8 @@ QWidget* ImagePreviewPlugin::options() {
 	return optionsWid;
 }
 
-void ImagePreviewPlugin::setAccountInfoAccessingHost(AccountInfoAccessingHost* host) {
-	accInfo = host;
-}
-
-void ImagePreviewPlugin::setIconFactoryAccessingHost(IconFactoryAccessingHost* host) {
-	iconHost = host;
-}
-
-void ImagePreviewPlugin::setPsiAccountControllingHost(PsiAccountControllingHost *host) {
-	psiController = host;
-}
-
 void ImagePreviewPlugin::setOptionAccessingHost(OptionAccessingHost *host) {
 	psiOptions = host;
-}
-
-void ImagePreviewPlugin::setActiveTabAccessingHost(ActiveTabAccessingHost* host) {
-	activeTab = host;
 }
 
 QString ImagePreviewPlugin::pluginInfo() {
@@ -220,7 +168,7 @@ QString ImagePreviewPlugin::pluginInfo() {
 }
 
 QPixmap ImagePreviewPlugin::icon() const {
-	return QPixmap(":/imagepreviewplugin/imagepreviewplugin.gif");
+	return QPixmap(":/imagepreviewplugin/imagepreviewplugin.png");
 }
 
 void ImagePreviewPlugin::messageAppended(const QString &, QTextEdit* te_log) {
@@ -262,7 +210,6 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 			manager->get(reply->request());
 		} else {
 			pending.remove(urlStr);
-			failed.insert(urlStr);
 		}
 		break;
 	case QNetworkAccessManager::GetOperation:
