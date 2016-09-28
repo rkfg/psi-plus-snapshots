@@ -1,6 +1,6 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
 	<qresource prefix="/imagepreviewplugin">
-		<file>imagepreviewplugin.gif</file>
+		<file>imagepreviewplugin.png</file>
 	</qresource>
 </RCC>
