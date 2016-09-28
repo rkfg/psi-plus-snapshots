@@ -52,10 +52,12 @@
 #include <QTextDocumentFragment>
 #include <QSpinBox>
 #include <QComboBox>
+#include <QCheckBox>
 
 #define constVersion "0.1.0"
 #define sizeLimitName "imgpreview-size-limit"
 #define previewSizeName "imgpreview-preview-size"
+#define allowUpscaleName "imgpreview-allow-upscale"
 
 class ImagePreviewPlugin: public QObject,
 		public PsiPlugin,
@@ -92,16 +94,15 @@ public:
 	virtual QString pluginInfo();
 	virtual QPixmap icon() const;
 	virtual void setupChatTab(QWidget* widget, int, const QString&) {
-		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)),
-				this, SLOT(messageAppended(const QString &, QTextEdit*)));
+		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)), this,
+				SLOT(messageAppended(const QString &, QTextEdit*)));
 	}
 	virtual void setupGCTab(QWidget* widget, int, const QString&) {
-		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)),
-				this, SLOT(messageAppended(const QString &, QTextEdit*)));
+		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)), this,
+				SLOT(messageAppended(const QString &, QTextEdit*)));
 	}
 
-	virtual bool appendingChatMessage(int, const QString&, QString&,
-			QDomElement&, bool) {
+	virtual bool appendingChatMessage(int, const QString&, QString&, QDomElement&, bool) {
 		return false;
 	}
 
@@ -123,6 +124,8 @@ private:
 	QPointer<QSpinBox> sb_previewSize;
 	int sizeLimit = 0;
 	QPointer<QComboBox> cb_sizeLimit;
+	bool allowUpscale = false;
+	QPointer<QCheckBox> cb_allowUpscale;
 };
 
 #ifndef HAVE_QT5
@@ -130,10 +133,9 @@ Q_EXPORT_PLUGIN(ImagePreviewPlugin)
 #endif
 
 ImagePreviewPlugin::ImagePreviewPlugin() :
-		iconHost(0), activeTab(0), accInfo(0), psiController(0), psiOptions(0), enabled(
-				false), manager(new QNetworkAccessManager(this)) {
-	connect(manager, SIGNAL(finished(QNetworkReply *)), this,
-			SLOT(imageReply(QNetworkReply *)));
+		iconHost(0), activeTab(0), accInfo(0), psiController(0), psiOptions(0), enabled(false), manager(
+				new QNetworkAccessManager(this)) {
+	connect(manager, SIGNAL(finished(QNetworkReply *)), this, SLOT(imageReply(QNetworkReply *)));
 }
 
 QString ImagePreviewPlugin::name() const {
@@ -159,6 +161,7 @@ bool ImagePreviewPlugin::enable() {
 	}
 	sizeLimit = psiOptions->getPluginOption(sizeLimitName, 1024 * 1024).toInt();
 	previewSize = psiOptions->getPluginOption(previewSizeName, 150).toInt();
+	allowUpscale = psiOptions->getPluginOption(allowUpscaleName, true).toBool();
 	return enabled;
 }
 
@@ -186,22 +189,21 @@ QWidget* ImagePreviewPlugin::options() {
 	sb_previewSize->setMaximum(65535);
 	vbox->addWidget(new QLabel(tr("Image preview size in pixels")));
 	vbox->addWidget(sb_previewSize);
+	cb_allowUpscale = new QCheckBox(tr("Allow upscale"));
+	vbox->addWidget(cb_allowUpscale);
 	vbox->addStretch();
 	return optionsWid;
 }
 
-void ImagePreviewPlugin::setAccountInfoAccessingHost(
-		AccountInfoAccessingHost* host) {
+void ImagePreviewPlugin::setAccountInfoAccessingHost(AccountInfoAccessingHost* host) {
 	accInfo = host;
 }
 
-void ImagePreviewPlugin::setIconFactoryAccessingHost(
-		IconFactoryAccessingHost* host) {
+void ImagePreviewPlugin::setIconFactoryAccessingHost(IconFactoryAccessingHost* host) {
 	iconHost = host;
 }
 
-void ImagePreviewPlugin::setPsiAccountControllingHost(
-		PsiAccountControllingHost *host) {
+void ImagePreviewPlugin::setPsiAccountControllingHost(PsiAccountControllingHost *host) {
 	psiController = host;
 }
 
@@ -209,14 +211,12 @@ void ImagePreviewPlugin::setOptionAccessingHost(OptionAccessingHost *host) {
 	psiOptions = host;
 }
 
-void ImagePreviewPlugin::setActiveTabAccessingHost(
-		ActiveTabAccessingHost* host) {
+void ImagePreviewPlugin::setActiveTabAccessingHost(ActiveTabAccessingHost* host) {
 	activeTab = host;
 }
 
 QString ImagePreviewPlugin::pluginInfo() {
-	return tr("Author: ") + "rkfg\n\n"
-			+ trUtf8("This plugin shows the preview image for an image URL.\n");
+	return tr("Author: ") + "rkfg\n\n" + trUtf8("This plugin shows the preview image for an image URL.\n");
 }
 
 QPixmap ImagePreviewPlugin::icon() const {
@@ -250,19 +250,15 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	int size = 0;
 	QString contentType;
 	QStringList allowedTypes = { "image/jpeg", "image/png", "image/gif" };
-	QTextEdit* te_log = qobject_cast<QTextEdit*>(
-			reply->request().originatingObject());
+	QTextEdit* te_log = qobject_cast<QTextEdit*>(reply->request().originatingObject());
 	QUrl url = reply->request().url();
 	QString urlStr = url.toEncoded();
 	switch (reply->operation()) {
 	case QNetworkAccessManager::HeadOperation:
 		size = reply->header(QNetworkRequest::ContentLengthHeader).toInt(&ok);
-		contentType =
-				reply->header(QNetworkRequest::ContentTypeHeader).toString();
-		qDebug() << "URL:" << url << "RESULT:" << reply->error() << "SIZE:"
-				<< size << "Content-type:" << contentType;
-		if (ok && allowedTypes.contains(contentType, Qt::CaseInsensitive)
-				&& size < sizeLimit) {
+		contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString();
+		qDebug() << "URL:" << url << "RESULT:" << reply->error() << "SIZE:" << size << "Content-type:" << contentType;
+		if (ok && allowedTypes.contains(contentType, Qt::CaseInsensitive) && size < sizeLimit) {
 			manager->get(reply->request());
 		} else {
 			pending.remove(urlStr);
@@ -272,23 +268,22 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	case QNetworkAccessManager::GetOperation:
 		try {
 			QImageReader imageReader(reply);
-			auto image = imageReader.read().scaled(previewSize, previewSize,
-					Qt::KeepAspectRatio, Qt::SmoothTransformation);
+			QImage image = imageReader.read();
 			if (imageReader.error() != QImageReader::UnknownError) {
-				qWarning() << "ERROR:" << imageReader.errorString();
+				throw std::runtime_error(imageReader.errorString().toStdString());
+			}
+			if (image.width() > previewSize || image.height() > previewSize || allowUpscale) {
+				image = image.scaled(previewSize, previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 			}
 			QUrl url = reply->request().url();
 			qDebug() << "Image size:" << image.size();
-			te_log->document()->addResource(QTextDocument::ImageResource, url,
-					image);
+			te_log->document()->addResource(QTextDocument::ImageResource, url, image);
 			auto saved = te_log->textCursor();
 			te_log->moveCursor(QTextCursor::End);
 			while (te_log->find(urlStr, QTextDocument::FindBackward)) {
 				auto cur = te_log->textCursor();
 				QString html = cur.selection().toHtml();
-				html.replace(
-						QRegExp("(<a href=\"[^\"]*\">)(.*)(</a>)"),
-						QString("\\1<img src='%1'/>\\3").arg(urlStr));
+				html.replace(QRegExp("(<a href=\"[^\"]*\">)(.*)(</a>)"), QString("\\1<img src='%1'/>\\3").arg(urlStr));
 				cur.insertHtml(html);
 			}
 			te_log->setTextCursor(saved);
@@ -304,16 +299,16 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 }
 
 void ImagePreviewPlugin::applyOptions() {
-	psiOptions->setPluginOption(previewSizeName,
-			previewSize = sb_previewSize->value());
-	psiOptions->setPluginOption(sizeLimitName,
-			sizeLimit =
-					cb_sizeLimit->itemData(cb_sizeLimit->currentIndex()).toInt());
+	psiOptions->setPluginOption(previewSizeName, previewSize = sb_previewSize->value());
+	psiOptions->setPluginOption(sizeLimitName, sizeLimit =
+			cb_sizeLimit->itemData(cb_sizeLimit->currentIndex()).toInt());
+	psiOptions->setPluginOption(allowUpscaleName, allowUpscale = cb_allowUpscale->checkState() == Qt::Checked);
 }
 
 void ImagePreviewPlugin::restoreOptions() {
 	sb_previewSize->setValue(previewSize);
 	cb_sizeLimit->setCurrentIndex(cb_sizeLimit->findData(sizeLimit));
+	cb_allowUpscale->setCheckState(allowUpscale ? Qt::Checked : Qt::Unchecked);
 }
 
 #include "imagepreviewplugin.moc"
