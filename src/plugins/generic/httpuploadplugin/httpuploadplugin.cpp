@@ -166,6 +166,10 @@ private:
 		if (dataSource) {
 			dataSource->deleteLater();
 		}
+		if (imageBytes) {
+			delete imageBytes;
+			imageBytes = 0;
+		}
 	}
 	void processServices(const QDomElement& query, int account);
 	void processOneService(const QDomElement& query, const QString& service, int account);
@@ -182,6 +186,7 @@ private:
 	QNetworkAccessManager* manager;
 	QMap<QString, UploadService> serviceNames;
 	QPointer<QIODevice> dataSource;
+	QByteArray* imageBytes = 0;
 	CurrentUpload currentUpload;
 	QTimer slotTimeout;
 	QSpinBox *sb_previewWidth = 0;
@@ -341,6 +346,10 @@ void HttpUploadPlugin::upload(bool anything) {
 				SLOT_TIMEOUT / 1000));
 		return;
 	}
+	if (imageBytes) {
+		delete imageBytes;
+		imageBytes = 0;
+	}
 	QString serviceName;
 	int sizeLimit = -1;
 	int account = accountNumber();
@@ -382,15 +391,15 @@ void HttpUploadPlugin::upload(bool anything) {
 	if (!anything && imageResize
 			&& (lowerImagename.endsWith(".jpg") || lowerImagename.endsWith(".jpeg") || lowerImagename.endsWith(".png"))
 			&& (pix.width() > imageSize || pix.height() > imageSize)) {
-		auto image = new QByteArray();
-		dataSource = new QBuffer(image);
+		imageBytes = new QByteArray();
+		dataSource = new QBuffer(imageBytes);
 		QString type = "jpg";
 		if (lowerImagename.endsWith(".png")) {
 			type = "png";
 		}
 		pix.scaled(imageSize, imageSize, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(dataSource,
 				type.toLatin1().constData(), imageQuality);
-		length = image->length();
+		length = imageBytes->length();
 		qDebug() << "Resized length:" << length;
 		dataSource->open(QIODevice::ReadOnly);
 	} else {
