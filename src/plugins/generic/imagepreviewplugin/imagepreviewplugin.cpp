@@ -40,6 +40,8 @@
 #include <QSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QWebView>
+#include <QWebFrame>
 
 #define constVersion "0.1.0"
 #define sizeLimitName "imgpreview-size-limit"
@@ -199,7 +201,17 @@ void ImagePreviewPlugin::messageAppended(const QString &, QWidget* logWidget) {
 		};
 		te_log->setTextCursor(cur);
 	} else {
-		qDebug() << "Webkit is not yet supported";
+		QWebView* wv_log = qobject_cast<QWebView*>(logWidget);
+		QRegExp urlRE("(https?://\\S*)");
+		QString src = wv_log->page()->mainFrame()->toPlainText();
+		int offset = 0;
+		int found = 0;
+		while ((found = urlRE.indexIn(src, offset)) >= 0) {
+			auto url = urlRE.cap(1);
+			qDebug() << "URL FOUND:" << url;
+			queueUrl(url, wv_log);
+			offset = found + urlRE.matchedLength();
+		}
 	}
 }
 
@@ -246,7 +258,18 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 				}
 				te_log->setTextCursor(saved);
 			} else {
-				qDebug() << "Webkit is not yet supported";
+				QByteArray imageBytes;
+				QBuffer imageBuf(&imageBytes);
+				image.save(&imageBuf, "jpg", 60);
+				QWebView* wv_log = qobject_cast<QWebView*>(reply->request().originatingObject());
+				QWebFrame* mainFrame = wv_log->page()->mainFrame();
+				mainFrame->evaluateJavaScript(QString("var links = document.body.getElementsByTagName('a');"
+						"for (var i = 0; i < links.length; i++) {"
+						"  var elem = links[i];"
+						"  if(elem.getAttribute('href') == '"+ urlStr +"') {"
+						"    elem.innerHTML = \"<img src='data:image/jpeg;base64,%1'/>\";"
+						"  }"
+						"}").arg(QString(imageBytes.toBase64())));
 			}
 		} catch (std::exception& e) {
 			qWarning() << "ERROR: " << e.what();
