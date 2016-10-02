@@ -40,6 +40,8 @@
 #include <QSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
+#include <QWebView>
+#include <QWebFrame>
 
 #define constVersion "0.1.0"
 #define sizeLimitName "imgpreview-size-limit"
@@ -73,12 +75,12 @@ public:
 	virtual QString pluginInfo();
 	virtual QPixmap icon() const;
 	virtual void setupChatTab(QWidget* widget, int, const QString&) {
-		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)), this,
-				SLOT(messageAppended(const QString &, QTextEdit*)));
+		connect(widget, SIGNAL(messageAppended(const QString &, QWidget*)),
+				SLOT(messageAppended(const QString &, QWidget*)));
 	}
 	virtual void setupGCTab(QWidget* widget, int, const QString&) {
-		connect(widget, SIGNAL(messageAppended(const QString &, QTextEdit*)), this,
-				SLOT(messageAppended(const QString &, QTextEdit*)));
+		connect(widget, SIGNAL(messageAppended(const QString &, QWidget*)),
+				SLOT(messageAppended(const QString &, QWidget*)));
 	}
 
 	virtual bool appendingChatMessage(int, const QString&, QString&, QDomElement&, bool) {
@@ -86,7 +88,7 @@ public:
 	}
 
 private slots:
-	void messageAppended(const QString &, QTextEdit*);
+	void messageAppended(const QString &, QWidget*);
 	void imageReply(QNetworkReply* reply);
 private:
 	OptionAccessingHost *psiOptions;
@@ -99,6 +101,7 @@ private:
 	QPointer<QComboBox> cb_sizeLimit;
 	bool allowUpscale = false;
 	QPointer<QCheckBox> cb_allowUpscale;
+	void queueUrl(const QString& url, QObject* origin);
 };
 
 #ifndef HAVE_QT5
@@ -107,7 +110,7 @@ Q_EXPORT_PLUGIN(ImagePreviewPlugin)
 
 ImagePreviewPlugin::ImagePreviewPlugin() :
 		psiOptions(0), enabled(false), manager(new QNetworkAccessManager(this)) {
-	connect(manager, SIGNAL(finished(QNetworkReply *)), this, SLOT(imageReply(QNetworkReply *)));
+	connect(manager, SIGNAL(finished(QNetworkReply *)), SLOT(imageReply(QNetworkReply *)));
 }
 
 QString ImagePreviewPlugin::name() const {
@@ -171,26 +174,45 @@ QPixmap ImagePreviewPlugin::icon() const {
 	return QPixmap(":/imagepreviewplugin/imagepreviewplugin.png");
 }
 
-void ImagePreviewPlugin::messageAppended(const QString &, QTextEdit* te_log) {
+void ImagePreviewPlugin::queueUrl(const QString& url, QObject* origin) {
+	if (!pending.contains(url)) {
+		pending.insert(url);
+		QNetworkRequest req;
+		req.setUrl(QUrl(url));
+		req.setOriginatingObject(origin);
+		manager->head(req);
+	}
+}
+
+void ImagePreviewPlugin::messageAppended(const QString &, QWidget* logWidget) {
 	if (!enabled) {
 		return;
 	}
-	auto cur = te_log->textCursor();
-	te_log->moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
-	te_log->moveCursor(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor);
-	QTextCursor found = te_log->textCursor();
-	while (!(found = te_log->document()->find(QRegExp("https?://\\S*"), found)).isNull()) {
-		auto url = found.selectedText();
-		qDebug() << "URL FOUND:" << url;
-		if (!pending.contains(url)) {
-			pending.insert(url);
-			QNetworkRequest req;
-			req.setUrl(QUrl(url));
-			req.setOriginatingObject(te_log);
-			manager->head(req);
+	QTextEdit* te_log = qobject_cast<QTextEdit*>(logWidget);
+	if (te_log) {
+		auto cur = te_log->textCursor();
+		te_log->moveCursor(QTextCursor::End, QTextCursor::MoveAnchor);
+		te_log->moveCursor(QTextCursor::StartOfBlock, QTextCursor::MoveAnchor);
+		QTextCursor found = te_log->textCursor();
+		while (!(found = te_log->document()->find(QRegExp("https?://\\S*"), found)).isNull()) {
+			auto url = found.selectedText();
+			qDebug() << "URL FOUND:" << url;
+			queueUrl(url, te_log);
+		};
+		te_log->setTextCursor(cur);
+	} else {
+		QWebView* wv_log = qobject_cast<QWebView*>(logWidget);
+		QRegExp urlRE("(https?://\\S*)");
+		QString src = wv_log->page()->mainFrame()->toPlainText();
+		int offset = 0;
+		int found = 0;
+		while ((found = urlRE.indexIn(src, offset)) >= 0) {
+			auto url = urlRE.cap(1);
+			qDebug() << "URL FOUND:" << url;
+			queueUrl(url, wv_log);
+			offset = found + urlRE.matchedLength();
 		}
-	};
-	te_log->setTextCursor(cur);
+	}
 }
 
 void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
@@ -198,7 +220,6 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	int size = 0;
 	QString contentType;
 	QStringList allowedTypes = { "image/jpeg", "image/png", "image/gif" };
-	QTextEdit* te_log = qobject_cast<QTextEdit*>(reply->request().originatingObject());
 	QUrl url = reply->request().url();
 	QString urlStr = url.toEncoded();
 	switch (reply->operation()) {
@@ -222,18 +243,34 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 			if (image.width() > previewSize || image.height() > previewSize || allowUpscale) {
 				image = image.scaled(previewSize, previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 			}
-			QUrl url = reply->request().url();
 			qDebug() << "Image size:" << image.size();
-			te_log->document()->addResource(QTextDocument::ImageResource, url, image);
-			auto saved = te_log->textCursor();
-			te_log->moveCursor(QTextCursor::End);
-			while (te_log->find(urlStr, QTextDocument::FindBackward)) {
-				auto cur = te_log->textCursor();
-				QString html = cur.selection().toHtml();
-				html.replace(QRegExp("(<a href=\"[^\"]*\">)(.*)(</a>)"), QString("\\1<img src='%1'/>\\3").arg(urlStr));
-				cur.insertHtml(html);
+			QTextEdit* te_log = qobject_cast<QTextEdit*>(reply->request().originatingObject());
+			if (te_log) {
+				te_log->document()->addResource(QTextDocument::ImageResource, url, image);
+				auto saved = te_log->textCursor();
+				te_log->moveCursor(QTextCursor::End);
+				while (te_log->find(urlStr, QTextDocument::FindBackward)) {
+					auto cur = te_log->textCursor();
+					QString html = cur.selection().toHtml();
+					html.replace(QRegExp("(<a href=\"[^\"]*\">)(.*)(</a>)"),
+							QString("\\1<img src='%1'/>\\3").arg(urlStr));
+					cur.insertHtml(html);
+				}
+				te_log->setTextCursor(saved);
+			} else {
+				QByteArray imageBytes;
+				QBuffer imageBuf(&imageBytes);
+				image.save(&imageBuf, "jpg", 60);
+				QWebView* wv_log = qobject_cast<QWebView*>(reply->request().originatingObject());
+				QWebFrame* mainFrame = wv_log->page()->mainFrame();
+				mainFrame->evaluateJavaScript(QString("var links = document.body.getElementsByTagName('a');"
+						"for (var i = 0; i < links.length; i++) {"
+						"  var elem = links[i];"
+						"  if(elem.getAttribute('href') == '"+ urlStr +"') {"
+						"    elem.innerHTML = \"<img src='data:image/jpeg;base64,%1'/>\";"
+						"  }"
+						"}").arg(QString(imageBytes.toBase64())));
 			}
-			te_log->setTextCursor(saved);
 		} catch (std::exception& e) {
 			qWarning() << "ERROR: " << e.what();
 		}

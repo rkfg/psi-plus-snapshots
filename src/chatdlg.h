@@ -96,7 +96,7 @@ signals:
 	void messagesRead(const Jid &);
 	void aSend(const Message &);
 	void aFile(const Jid &);
-	void messageAppended(const QString &, QTextEdit*);
+	void messageAppended(const QString &, QWidget*);
 
 	/**
 	 * Signals if user (re)started/stopped composing

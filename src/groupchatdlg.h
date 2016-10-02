@@ -103,7 +103,7 @@ protected:
 signals:
 	void aSend(const Message &);
 	void messagesRead(const Jid &);
-	void messageAppended(const QString &, QTextEdit*);
+	void messageAppended(const QString &, QWidget*);
 
 public slots:
 	// reimplemented
