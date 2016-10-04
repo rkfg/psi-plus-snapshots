@@ -44,6 +44,7 @@
 #include <QWebFrame>
 #include <QWebElementCollection>
 
+//#define IMGPREVIEW_DEBUG
 #define constVersion "0.1.0"
 #define sizeLimitName "imgpreview-size-limit"
 #define previewSizeName "imgpreview-preview-size"
@@ -197,7 +198,9 @@ void ImagePreviewPlugin::messageAppended(const QString &, QWidget* logWidget) {
 		QTextCursor found = te_log->textCursor();
 		while (!(found = te_log->document()->find(QRegExp("https?://\\S*"), found)).isNull()) {
 			auto url = found.selectedText();
+#ifdef IMGPREVIEW_DEBUG
 			qDebug() << "URL FOUND:" << url;
+#endif
 			queueUrl(url, te_log);
 		};
 		te_log->setTextCursor(cur);
@@ -232,7 +235,9 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 	case QNetworkAccessManager::HeadOperation:
 		size = reply->header(QNetworkRequest::ContentLengthHeader).toInt(&ok);
 		contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString();
+#ifdef IMGPREVIEW_DEBUG
 		qDebug() << "URL:" << url << "RESULT:" << reply->error() << "SIZE:" << size << "Content-type:" << contentType;
+#endif
 		if (ok && allowedTypes.contains(contentType, Qt::CaseInsensitive) && size < sizeLimit) {
 			manager->get(reply->request());
 		} else {
@@ -249,7 +254,9 @@ void ImagePreviewPlugin::imageReply(QNetworkReply* reply) {
 			if (image.width() > previewSize || image.height() > previewSize || allowUpscale) {
 				image = image.scaled(previewSize, previewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 			}
+#ifdef IMGPREVIEW_DEBUG
 			qDebug() << "Image size:" << image.size();
+#endif
 			QTextEdit* te_log = qobject_cast<QTextEdit*>(reply->request().originatingObject());
 			if (te_log) {
 				te_log->document()->addResource(QTextDocument::ImageResource, url, image);
