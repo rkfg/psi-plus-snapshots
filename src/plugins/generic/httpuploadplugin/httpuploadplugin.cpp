@@ -55,6 +55,7 @@
 #include <QSpinBox>
 #include "previewfiledialog.h"
 
+//#define DEBUG_UPLOAD
 #define constVersion "0.1.0"
 #define CONST_LAST_FOLDER "httpupload-lastfolder"
 #define SLOT_TIMEOUT 10000
@@ -400,7 +401,9 @@ void HttpUploadPlugin::upload(bool anything) {
 		pix.scaled(imageSize, imageSize, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(dataSource,
 				type.toLatin1().constData(), imageQuality);
 		length = imageBytes->length();
+#ifdef DEBUG_UPLOAD
 		qDebug() << "Resized length:" << length;
+#endif
 		dataSource->open(QIODevice::ReadOnly);
 	} else {
 		length = fileInfo.size();
@@ -429,7 +432,9 @@ void HttpUploadPlugin::upload(bool anything) {
 			"<content-type>%6</content-type>"
 			"</request>"
 			"</iq>").arg(jid).arg(getId(account)).arg(serviceName).arg(escape(imageName)).arg(length).arg(mimeType);
+#ifdef DEBUG_UPLOAD
 	qDebug() << "Requesting slot:" << slotRequestStanza;
+#endif
 	slotTimeout.start(SLOT_TIMEOUT);
 	stanzaSender->sendStanza(account, slotRequestStanza);
 }
@@ -468,7 +473,9 @@ void HttpUploadPlugin::processServices(const QDomElement& query, int account) {
 			QString serviceDiscoStanza = QString("<iq from='%1' id='%2' to='%3' type='get'>"
 					"<query xmlns='http://jabber.org/protocol/disco#info'/>"
 					"</iq>").arg(curJid).arg(getId(account)).arg(serviceJid);
+#ifdef DEBUG_UPLOAD
 			qDebug() << "Discovering service" << serviceJid;
+#endif
 			stanzaSender->sendStanza(account, serviceDiscoStanza);
 		}
 	}
@@ -481,7 +488,9 @@ void HttpUploadPlugin::processOneService(const QDomElement& query, const QString
 	bool ok = false;
 	while (!feature.isNull()) {
 		if (feature.attribute("var") == "urn:xmpp:http:upload") {
+#ifdef DEBUG_UPLOAD
 			qDebug() << "Service" << service << "looks like http upload";
+#endif
 			auto x = query.firstChildElement("x");
 			while (!x.isNull()) {
 				auto field = x.firstChildElement("field");
@@ -490,7 +499,9 @@ void HttpUploadPlugin::processOneService(const QDomElement& query, const QString
 						auto sizeNode = field.firstChildElement("value");
 						int foundSizeLimit = sizeNode.text().toInt(&ok);
 						if (ok) {
+#ifdef DEBUG_UPLOAD
 							qDebug() << "Discovered size limit:" << foundSizeLimit;
+#endif
 							sizeLimit = foundSizeLimit;
 							break;
 						}
@@ -523,9 +534,11 @@ void HttpUploadPlugin::processUploadSlot(const QDomElement& xml) {
 	if (slot.attribute("xmlns") == "urn:xmpp:http:upload") {
 		slotTimeout.stop();
 		QString put = slot.firstChildElement("put").text();
-		qDebug() << "PUT:" << put;
 		QString get = slot.firstChildElement("get").text();
+#ifdef DEBUG_UPLOAD
+		qDebug() << "PUT:" << put;
 		qDebug() << "GET:" << get;
+#endif
 		if (get.isEmpty() || put.isEmpty()) {
 			QMessageBox::critical(0, tr("Error requesting slot"),
 					tr("Either put or get URL is missing in the server's reply."));
@@ -548,10 +561,6 @@ void HttpUploadPlugin::processUploadSlot(const QDomElement& xml) {
 }
 
 bool HttpUploadPlugin::incomingStanza(int account, const QDomElement& xml) {
-	/*QString s;
-	 QTextStream str(&s, QIODevice::WriteOnly);
-	 xml.save(str, 2);
-	 qDebug() << "DUMP:" << s;*/
 	if (xml.nodeName() == "iq" && xml.attribute("type") == "result") {
 		QDomElement query = xml.firstChildElement("query");
 		if (!query.isNull()) {
