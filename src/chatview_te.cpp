@@ -38,6 +38,10 @@
 #include <QMenu>
 #include <QTextDocumentFragment>
 #include <QTextBlock>
+//#define CORRECTION_DEBUG
+#ifdef CORRECTION_DEBUG
+#include <QDebug>
+#endif
 
 static const char *informationalColorOpt = "options.ui.look.colors.messages.informational";
 static const QRegExp underlineFixRE("(<a href=\"addnick://psi/[^\"]*\"><span style=\")");
@@ -318,6 +322,11 @@ void ChatView::dispatchMessage(const MessageView &mv)
 				QRegExp msgRE;
 				int capIndex;
 				QString msgid = QRegExp::escape(TextUtil::escape("msgid_" + replaceId + "_" + mv.userId()));
+				// regexp for private chats without clickable nicks, empty brackets are for group index compatibility
+				QRegExp msgPrivRE("(<img src=[^<]*<span[^<]*</span>())(\\s*)?(.*)<a name=\"" + msgid + "\"></a>.*</p>");
+#ifdef CORRECTION_DEBUG
+				qDebug() << "Replacing" << msgid << "with" << mv.formattedText();
+#endif
 				if (PsiOptions::instance()->getOption("options.ui.chat.use-chat-says-style").toBool()) {
 					msgRE.setPattern("(<br />)(.*)<a name=\"" + msgid + "\"></a>.*</p>");
 					capIndex = 2;
@@ -341,10 +350,27 @@ void ChatView::dispatchMessage(const MessageView &mv)
 						textCursor().setBlockFormat(format);
 					}
 					QString srcHtml = textCursor().selection().toHtml();
+#ifdef CORRECTION_DEBUG
+					qDebug() << "HTML:" << srcHtml;
+#endif
+					QString oldText;
+					QRegExp replaceRE;
 					if (msgRE.indexIn(srcHtml) >= 0) {
-						QString oldText = msgRE.cap(capIndex);
+#ifdef CORRECTION_DEBUG
+						qDebug() << "msgRE matched";
+#endif
+						oldText = msgRE.cap(capIndex);
+						replaceRE = msgRE;
+					} else if (msgPrivRE.indexIn(srcHtml) >= 0) {
+#ifdef CORRECTION_DEBUG
+						qDebug() << "msgPrivRE matched";
+#endif
+						oldText = msgPrivRE.cap(capIndex);
+						replaceRE = msgPrivRE;
+					}
+					if (!oldText.isEmpty()) {
 						oldText.replace(removeTagsRE, "");
-						srcHtml.replace(msgRE, "\\1\\3" +
+						srcHtml.replace(replaceRE, "\\1\\3" +
 								mv.formattedText()
 										+ "<img src=\"icon:log_icon_corrected\" title=\""
 										+ TextUtil::escape(oldText) + "\" /></p>");

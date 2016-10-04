@@ -340,7 +340,7 @@ void ChatView::dispatchMessage(const MessageView &mv)
 		QString replaceText = mv.formattedText().replace("\"", "\\\"");
 		QString jsCommand =
 				QString(
-						"var msgs = document.getElementsByName(\"%1\");"
+						"var msgs = document.querySelectorAll(\"a[name=\\\"%1\\\"]\");"
 						"if (msgs) {"
 						"  var elem = msgs[msgs.length - 1].previousSibling;"
 						"  while (next = elem.nextSibling) {"
